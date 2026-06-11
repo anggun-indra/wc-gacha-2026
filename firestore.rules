@@ -12,11 +12,11 @@ service cloud.firestore {
     }
 
     function isEmailVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn();
     }
 
     function isAdmin() {
-      return isEmailVerified() && request.auth.token.email == "yusufma9292@gmail.com";
+      return isSignedIn() && request.auth.token.email == "yusufma9292@gmail.com";
     }
 
     function isValidId(id) {
@@ -44,7 +44,7 @@ service cloud.firestore {
         isAdmin()
         || (
           // Increment playerCount on Join Room
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['playerCount'])
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['playerCount', 'playerIds'])
           && request.resource.data.playerCount == resource.data.playerCount + 1
           && request.resource.data.playerCount <= 8
         )
