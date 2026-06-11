@@ -3,8 +3,35 @@ import { useAuth } from "../context/AuthContext";
 import { LogOut, RefreshCw, Calendar, Flame, Sparkles, TrendingUp, HelpCircle, ShieldCheck, Trophy } from "lucide-react";
 import { getFlagUrl } from "../lib/flags";
 
+// Helper to find World Cup champion from bracket data
+const getWorldCupChampion = (bracket: any): string | null => {
+  if (!bracket || !bracket.rounds) return null;
+  const finalMatches = bracket.rounds["Final"];
+  if (!finalMatches || finalMatches.length === 0) return null;
+  const finalMatch = finalMatches[0];
+  const finished = ["FT", "AET", "PEN"].includes(finalMatch.status);
+  if (!finished) return null;
+  if (finalMatch.winner === "home") return finalMatch.homeTeam;
+  if (finalMatch.winner === "away") return finalMatch.awayTeam;
+  return null;
+};
+
+// Helper to check if user owns the World Cup champion team
+const isOwnerOfWorldCupChampion = (profile: any, championName: string | null): boolean => {
+  if (!profile || !championName) return false;
+  const cName = championName.toLowerCase();
+  return (
+    profile.favoritTeam?.toLowerCase() === cName ||
+    profile.darkHorseTeam?.toLowerCase() === cName ||
+    profile.menengahAtasTeam?.toLowerCase() === cName ||
+    profile.menengahTeam?.toLowerCase() === cName ||
+    profile.underdogKompetitifTeam?.toLowerCase() === cName ||
+    profile.underdogBeratTeam?.toLowerCase() === cName
+  );
+};
+
 export const Dashboard: React.FC = () => {
-  const { user, profile, metadata, teams, logOut, simulateMatchDay, fetchAndApplyRealResults, syncMatchesFromApiFootball, applyManualMatchResult, triggerGachaLottery, syncStandingsAndBracket, actionLoading } = useAuth();
+  const { user, profile, metadata, teams, users, bracket, logOut, simulateMatchDay, fetchAndApplyRealResults, syncMatchesFromApiFootball, applyManualMatchResult, triggerGachaLottery, syncStandingsAndBracket, actionLoading } = useAuth();
   const [selectedDate, setSelectedDate] = React.useState("2026-06-11");
   const [manualTeamA, setManualTeamA] = React.useState("");
   const [manualTeamB, setManualTeamB] = React.useState("");
@@ -19,14 +46,46 @@ export const Dashboard: React.FC = () => {
   const underdogKompetitifTeam = profile ? teams.find((t) => t.name === profile.underdogKompetitifTeam) : undefined;
   const underdogBeratTeam = profile ? teams.find((t) => t.name === profile.underdogBeratTeam) : undefined;
 
-  const totalPoints = profile ? (
-    (favoritTeam?.points || 0) + 
-    (darkTeam?.points || 0) + 
-    (menengahAtasTeam?.points || 0) + 
-    (menengahTeam?.points || 0) + 
-    (underdogKompetitifTeam?.points || 0) + 
-    (underdogBeratTeam?.points || 0)
-  ) : 0;
+  const championTeam = getWorldCupChampion(bracket);
+
+  // Compute base points for all users to find maxOthersPoints
+  let maxOthersPoints = 0;
+  let currentUserBasePoints = 0;
+  let currentUserBonus = 0;
+
+  (users || []).forEach((u) => {
+    const uFav = teams.find((t) => t.name === u.favoritTeam);
+    const uDark = teams.find((t) => t.name === u.darkHorseTeam);
+    const uMA = teams.find((t) => t.name === u.menengahAtasTeam);
+    const uM = teams.find((t) => t.name === u.menengahTeam);
+    const uUK = teams.find((t) => t.name === u.underdogKompetitifTeam);
+    const uUB = teams.find((t) => t.name === u.underdogBeratTeam);
+
+    const basePts = 
+      (uFav?.points || 0) + 
+      (uDark?.points || 0) + 
+      (uMA?.points || 0) + 
+      (uM?.points || 0) + 
+      (uUK?.points || 0) + 
+      (uUB?.points || 0);
+
+    if (profile && u.userId === profile.userId) {
+      currentUserBasePoints = basePts;
+    }
+
+    const isOwner = isOwnerOfWorldCupChampion(u, championTeam);
+    if (!isOwner) {
+      if (basePts > maxOthersPoints) {
+        maxOthersPoints = basePts;
+      }
+    }
+  });
+
+  if (profile && championTeam && isOwnerOfWorldCupChampion(profile, championTeam)) {
+    currentUserBonus = Math.max(100, (maxOthersPoints - currentUserBasePoints) + 10);
+  }
+
+  const totalPoints = currentUserBasePoints + currentUserBonus;
 
   return (
     <div className="space-y-6">
@@ -147,8 +206,15 @@ export const Dashboard: React.FC = () => {
                 <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-slate-400">
                   Skuad Gacha Anda (6 Tim Nasional)
                 </h3>
-                <div className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-mono font-bold text-indigo-300 border border-indigo-500/30">
-                  Total Poin Anda: {totalPoints} PTS
+                <div className="flex flex-col items-end gap-1">
+                  <div className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-mono font-bold text-indigo-300 border border-indigo-500/30">
+                    Total Poin Anda: {totalPoints} PTS
+                  </div>
+                  {currentUserBonus > 0 && (
+                    <span className="text-[10px] text-emerald-400 font-bold animate-pulse flex items-center gap-1">
+                      🏆 BONUS JUARA WORLD CUP (+{currentUserBonus} PTS)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -168,8 +234,13 @@ export const Dashboard: React.FC = () => {
                     className="h-4 w-6.5 rounded shadow object-cover" 
                   />
                 </div>
-                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate">
-                  {profile.favoritTeam}
+                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate flex items-center justify-between">
+                  <span>{profile.favoritTeam}</span>
+                  {profile.favoritTeam === championTeam && (
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/25 px-1.5 py-0.5 text-[8px] font-extrabold text-amber-300 border border-amber-500/30 uppercase tracking-wider animate-pulse">
+                      🏆 JUARA
+                    </span>
+                  )}
                 </h4>
                 
                 <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-slate-800/80 pt-3">
@@ -202,8 +273,13 @@ export const Dashboard: React.FC = () => {
                     className="h-4 w-6.5 rounded shadow object-cover" 
                   />
                 </div>
-                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate">
-                  {profile.darkHorseTeam}
+                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate flex items-center justify-between">
+                  <span>{profile.darkHorseTeam}</span>
+                  {profile.darkHorseTeam === championTeam && (
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/25 px-1.5 py-0.5 text-[8px] font-extrabold text-amber-300 border border-amber-500/30 uppercase tracking-wider animate-pulse">
+                      🏆 JUARA
+                    </span>
+                  )}
                 </h4>
 
                 <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-slate-800/80 pt-3">
@@ -236,8 +312,13 @@ export const Dashboard: React.FC = () => {
                     className="h-4 w-6.5 rounded shadow object-cover" 
                   />
                 </div>
-                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate">
-                  {profile.menengahAtasTeam}
+                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate flex items-center justify-between">
+                  <span>{profile.menengahAtasTeam}</span>
+                  {profile.menengahAtasTeam === championTeam && (
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/25 px-1.5 py-0.5 text-[8px] font-extrabold text-amber-300 border border-amber-500/30 uppercase tracking-wider animate-pulse">
+                      🏆 JUARA
+                    </span>
+                  )}
                 </h4>
 
                 <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-slate-800/80 pt-3">
@@ -270,8 +351,13 @@ export const Dashboard: React.FC = () => {
                     className="h-4 w-6.5 rounded shadow object-cover" 
                   />
                 </div>
-                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate">
-                  {profile.menengahTeam}
+                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate flex items-center justify-between">
+                  <span>{profile.menengahTeam}</span>
+                  {profile.menengahTeam === championTeam && (
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/25 px-1.5 py-0.5 text-[8px] font-extrabold text-amber-300 border border-amber-500/30 uppercase tracking-wider animate-pulse">
+                      🏆 JUARA
+                    </span>
+                  )}
                 </h4>
 
                 <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-slate-800/80 pt-3">
@@ -304,8 +390,13 @@ export const Dashboard: React.FC = () => {
                     className="h-4 w-6.5 rounded shadow object-cover" 
                   />
                 </div>
-                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate">
-                  {profile.underdogKompetitifTeam}
+                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate flex items-center justify-between">
+                  <span>{profile.underdogKompetitifTeam}</span>
+                  {profile.underdogKompetitifTeam === championTeam && (
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/25 px-1.5 py-0.5 text-[8px] font-extrabold text-amber-300 border border-amber-500/30 uppercase tracking-wider animate-pulse">
+                      🏆 JUARA
+                    </span>
+                  )}
                 </h4>
 
                 <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-slate-800/80 pt-3">
@@ -338,8 +429,13 @@ export const Dashboard: React.FC = () => {
                     className="h-4 w-6.5 rounded shadow object-cover" 
                   />
                 </div>
-                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate">
-                  {profile.underdogBeratTeam}
+                <h4 className="font-sans text-base font-bold text-white uppercase tracking-tight truncate flex items-center justify-between">
+                  <span>{profile.underdogBeratTeam}</span>
+                  {profile.underdogBeratTeam === championTeam && (
+                    <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/25 px-1.5 py-0.5 text-[8px] font-extrabold text-amber-300 border border-amber-500/30 uppercase tracking-wider animate-pulse">
+                      🏆 JUARA
+                    </span>
+                  )}
                 </h4>
 
                 <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-slate-800/80 pt-3">

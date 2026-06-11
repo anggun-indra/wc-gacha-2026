@@ -3,9 +3,38 @@ import { useAuth } from "../context/AuthContext";
 import { Trophy, TrendingUp, Calendar, ChevronDown, ChevronUp, Award, Zap } from "lucide-react";
 import { getFlagUrl } from "../lib/flags";
 
+// Helper to find World Cup champion from bracket data
+const getWorldCupChampion = (bracket: any): string | null => {
+  if (!bracket || !bracket.rounds) return null;
+  const finalMatches = bracket.rounds["Final"];
+  if (!finalMatches || finalMatches.length === 0) return null;
+  const finalMatch = finalMatches[0];
+  const finished = ["FT", "AET", "PEN"].includes(finalMatch.status);
+  if (!finished) return null;
+  if (finalMatch.winner === "home") return finalMatch.homeTeam;
+  if (finalMatch.winner === "away") return finalMatch.awayTeam;
+  return null;
+};
+
+// Helper to check if user owns the World Cup champion team
+const isOwnerOfWorldCupChampion = (profile: any, championName: string | null): boolean => {
+  if (!profile || !championName) return false;
+  const cName = championName.toLowerCase();
+  return (
+    profile.favoritTeam?.toLowerCase() === cName ||
+    profile.darkHorseTeam?.toLowerCase() === cName ||
+    profile.menengahAtasTeam?.toLowerCase() === cName ||
+    profile.menengahTeam?.toLowerCase() === cName ||
+    profile.underdogKompetitifTeam?.toLowerCase() === cName ||
+    profile.underdogBeratTeam?.toLowerCase() === cName
+  );
+};
+
 export const Leaderboard: React.FC = () => {
-  const { users, teams, metadata } = useAuth();
+  const { users, teams, metadata, bracket } = useAuth();
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+
+  const championTeam = getWorldCupChampion(bracket);
 
   // Helper to map and calculate scores for leaderboard profiles
   const leaderboardData = users.map((u) => {
@@ -23,7 +52,7 @@ export const Leaderboard: React.FC = () => {
     const ukPoints = underdogKompetitifTeam?.points || 0;
     const ubPoints = underdogBeratTeam?.points || 0;
 
-    const totalPoints = fPoints + dPoints + maPoints + mPoints + ukPoints + ubPoints;
+    const basePoints = fPoints + dPoints + maPoints + mPoints + ukPoints + ubPoints;
 
     const topProb = favoritTeam?.probability || 0;
     const darkProb = darkTeam?.probability || 0;
@@ -41,7 +70,7 @@ export const Leaderboard: React.FC = () => {
       menengahTeam,
       underdogKompetitifTeam,
       underdogBeratTeam,
-      totalPoints,
+      basePoints,
       fPoints,
       dPoints,
       maPoints,
@@ -52,10 +81,38 @@ export const Leaderboard: React.FC = () => {
     };
   });
 
+  // Find highest basePoints of players who do NOT own the World Cup champion
+  let maxOthersPoints = 0;
+  leaderboardData.forEach((item) => {
+    const isOwner = isOwnerOfWorldCupChampion(item.profile, championTeam);
+    if (!isOwner) {
+      if (item.basePoints > maxOthersPoints) {
+        maxOthersPoints = item.basePoints;
+      }
+    }
+  });
+
+  // Calculate final totalPoints with bonus
+  const finalLeaderboardData = leaderboardData.map((item) => {
+    const isOwner = isOwnerOfWorldCupChampion(item.profile, championTeam);
+    let bonusPoints = 0;
+    if (isOwner && championTeam) {
+      // Calculate bonus so they jump to the first place by at least 10 points (minimum 100 points bonus)
+      bonusPoints = Math.max(100, (maxOthersPoints - item.basePoints) + 10);
+    }
+    const totalPoints = item.basePoints + bonusPoints;
+    return {
+      ...item,
+      totalPoints,
+      bonusPoints,
+      isWorldCupChampionOwner: isOwner && !!championTeam
+    };
+  });
+
   // Sort Leaderboard strictly:
   // 1. Combined Points Descending
   // 2. Highest Single Team Championship Probability Descending (Tie breaker)
-  const sortedLeaderboard = [...leaderboardData].sort((a, b) => {
+  const sortedLeaderboard = [...finalLeaderboardData].sort((a, b) => {
     if (b.totalPoints !== a.totalPoints) {
       return b.totalPoints - a.totalPoints;
     }
@@ -145,6 +202,11 @@ export const Leaderboard: React.FC = () => {
                   <div>
                     <span className="text-sm font-medium text-slate-100 flex items-center gap-1">
                       {item.profile.name}
+                      {item.isWorldCupChampionOwner && (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-extrabold text-amber-400 border border-amber-500/20 uppercase tracking-wider">
+                          🏆 JUARA WORLD CUP
+                        </span>
+                      )}
                     </span>
                     <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-1 bg-slate-950/20 px-1.5 py-0.5 rounded-md w-max border border-slate-800/40">
                       <img src={getFlagUrl(item.profile.favoritTeam)} alt="" className="w-3.5 h-2.5 rounded shadow-sm shrink-0" title={item.profile.favoritTeam || ""} />
@@ -162,9 +224,15 @@ export const Leaderboard: React.FC = () => {
                     <span className="text-base font-black text-white block">
                       {item.totalPoints}
                     </span>
-                    <span className="text-[9px] text-indigo-400 font-medium block">
-                      Peluang: {item.highestProbability}%
-                    </span>
+                    {item.bonusPoints > 0 ? (
+                      <span className="text-[8px] text-emerald-400 font-bold block animate-pulse">
+                        (+{item.bonusPoints} PTS BONUS)
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-indigo-400 font-medium block">
+                        Peluang: {item.highestProbability}%
+                      </span>
+                    )}
                   </div>
                   <div>
                     {isExpanded ? (
