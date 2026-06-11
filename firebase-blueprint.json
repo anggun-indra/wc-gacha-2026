@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Global registered user profile",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique identifier for the user matching their Firebase Auth UID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Profile picture URL of the user"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user registered"
+        }
+      },
+      "required": ["userId", "name", "email", "createdAt"]
+    },
+    "Game": {
+      "title": "Game",
+      "description": "A self-contained tournament game session created by the admin",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique id for the game session"
+        },
+        "name": {
+          "type": "string",
+          "description": "The custom name of the game session chosen by the admin"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the game was created"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "The UID of the admin user who created this game"
+        },
+        "playerCount": {
+          "type": "number",
+          "description": "Current number of joined players (max 8)"
+        },
+        "gachaTriggered": {
+          "type": "boolean",
+          "description": "Flag indicating if the game has reached 8 players and gacha has been completed"
+        },
+        "dayCounter": {
+          "type": "number",
+          "description": "The current day number of the simulated tournament inside this game"
+        },
+        "lastUpdated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last simulation day run"
+        },
+        "teamsFilled": {
+          "type": "boolean",
+          "description": "Flag indicating if the admin has filled/populated the 48 teams for this game"
+        }
+      },
+      "required": ["id", "name", "createdAt", "playerCount", "gachaTriggered", "dayCounter", "lastUpdated", "teamsFilled"]
+    },
+    "GamePlayer": {
+      "title": "GamePlayer",
+      "description": "A player registration inside a specific game session",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique identifier matching the user's Auth UID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the user inside this game"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Profile picture URL"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the user joined this game"
+        },
+        "favoritTeam": {
+          "type": "string",
+          "description": "Name of the favorite team assigned, or null before gacha"
+        },
+        "darkHorseTeam": {
+          "type": "string",
+          "description": "Name of the dark horse team assigned, or null before gacha"
+        },
+        "menengahAtasTeam": {
+          "type": "string",
+          "description": "Name of the upper-middle team assigned, or null before gacha"
+        },
+        "menengahTeam": {
+          "type": "string",
+          "description": "Name of the middle team assigned, or null before gacha"
+        },
+        "underdogKompetitifTeam": {
+          "type": "string",
+          "description": "Name of the competitive underdog team assigned, or null before gacha"
+        },
+        "underdogBeratTeam": {
+          "type": "string",
+          "description": "Name of the heavy underdog team assigned, or null before gacha"
+        },
+        "hasGacha": {
+          "type": "boolean",
+          "description": "Indicates whether the player has received their gacha assignment"
+        }
+      },
+      "required": ["userId", "name", "email", "createdAt", "hasGacha"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "One of the 48 competing national teams inside a specific game",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique slug for the team"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the country"
+        },
+        "tier": {
+          "type": "string",
+          "enum": ["favorit", "dark", "menengah_atas", "menengah", "underdog_kompetitif", "underdog_berat"],
+          "description": "The tier of the team"
+        },
+        "points": {
+          "type": "number",
+          "description": "Current points accumulated by the team"
+        },
+        "probability": {
+          "type": "number",
+          "description": "Championship probability percentage (0 to 100)"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of the user who owns this team, or null"
+        },
+        "ownerName": {
+          "type": "string",
+          "description": "Name of the user who owns this team, or null"
+        }
+      },
+      "required": ["id", "name", "tier", "points", "probability"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Global user directory registries"
+    },
+    "/games/{gameId}": {
+      "schema": "Game",
+      "description": "Active game sessions"
+    },
+    "/games/{gameId}/teams/{teamId}": {
+      "schema": "Team",
+      "description": "National teams competing inside a game"
+    },
+    "/games/{gameId}/players/{userId}": {
+      "schema": "GamePlayer",
+      "description": "Player registrations and team assignments inside a game"
+    }
+  }
+}

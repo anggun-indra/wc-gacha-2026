@@ -1,0 +1,130 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isEmailVerified() && request.auth.token.email == "yusufma9292@gmail.com";
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Modern Users Collection (Global directory registration)
+    match /users/{userId} {
+      allow read: if isSignedIn();
+
+      allow create, update: if isEmailVerified()
+        && isValidId(userId)
+        && userId == request.auth.uid;
+    }
+
+    // Multi-Game Session Rules
+    match /games/{gameId} {
+      allow read, get, list: if isSignedIn();
+
+      // Only the specified admin can create games
+      allow create: if isAdmin() && isValidId(gameId);
+
+      // Updates can be done by admin, or by regular users when joining / running simulations
+      allow update: if isEmailVerified() && isValidId(gameId) && (
+        isAdmin()
+        || (
+          // Increment playerCount on Join Room
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['playerCount'])
+          && request.resource.data.playerCount == resource.data.playerCount + 1
+          && request.resource.data.playerCount <= 8
+        )
+        || (
+          // Finish and trigger Gacha when user count reaches 8
+          request.resource.data.diff(resource.data).affectedKeys().hasAll(['playerCount', 'gachaTriggered', 'dayCounter', 'lastUpdated'])
+          && resource.data.gachaTriggered == false
+          && request.resource.data.gachaTriggered == true
+          && request.resource.data.playerCount == 8
+        )
+        || (
+          // Daily Lazy simulation triggered by client refresher
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dayCounter', 'lastUpdated', 'latestMatches'])
+          && request.resource.data.dayCounter == resource.data.dayCounter + 1
+        )
+      );
+
+      // Teams Database (Nested inside specific games)
+      match /teams/{teamId} {
+        allow read: if isSignedIn();
+
+        allow create: if isAdmin() && isValidId(teamId);
+
+        allow update: if isEmailVerified() && isValidId(teamId) && (
+          isAdmin()
+          || (
+            // Player assignment during gacha trigger
+            resource.data.ownerId == null
+            && request.resource.data.ownerId != null
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerId', 'ownerName'])
+          )
+          || (
+            // Simulation metrics adjustments
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points', 'probability'])
+          )
+        );
+      }
+
+      // Game Players Registrations (Nested inside specific games)
+      match /players/{userId} {
+        allow read: if isSignedIn();
+
+        function isValidPlayerCreate(data) {
+          return data.keys().hasAll(['userId', 'name', 'email', 'photoURL', 'createdAt', 'favoritTeam', 'darkHorseTeam', 'menengahAtasTeam', 'menengahTeam', 'underdogKompetitifTeam', 'underdogBeratTeam', 'hasGacha'])
+            && data.keys().size() == 12
+            && data.userId == userId
+            && data.hasGacha == false;
+        }
+
+        function isValidPlayerGachaCreate(data) {
+          return data.keys().hasAll(['userId', 'name', 'email', 'photoURL', 'createdAt', 'favoritTeam', 'darkHorseTeam', 'menengahAtasTeam', 'menengahTeam', 'underdogKompetitifTeam', 'underdogBeratTeam', 'hasGacha'])
+            && data.keys().size() == 12
+            && data.userId == userId
+            && data.hasGacha == true;
+        }
+
+        allow create: if isEmailVerified() && isValidId(userId) && (
+          isAdmin()
+          || (
+            userId == request.auth.uid
+            && (isValidPlayerCreate(request.resource.data) || isValidPlayerGachaCreate(request.resource.data))
+          )
+        );
+
+        allow update: if isEmailVerified() && isValidId(userId) && (
+          isAdmin()
+          || (
+            userId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'photoURL'])
+          )
+          || (
+            // Transaction Gacha assignment for any participant in the transaction
+            resource.data.hasGacha == false
+            && request.resource.data.hasGacha == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'favoritTeam', 'darkHorseTeam', 'menengahAtasTeam', 'menengahTeam', 'underdogKompetitifTeam', 'underdogBeratTeam', 'hasGacha'
+            ])
+          )
+        );
+      }
+    }
+  }
+}
