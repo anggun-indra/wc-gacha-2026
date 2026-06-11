@@ -18,7 +18,7 @@ import {
   setDoc
 } from "firebase/firestore";
 import { db, auth, googleProvider, handleFirestoreError, OperationType } from "../firebase";
-import { UserProfile, Team, SystemMetadata, Game, MatchLog } from "../types";
+import { UserProfile, Team, SystemMetadata, Game, MatchLog, StandingsData, BracketData, BracketMatch, GroupStanding } from "../types";
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -46,6 +46,9 @@ interface AuthContextType {
   syncMatchesFromApiFootball: (dateStr: string) => Promise<void>;
   applyManualMatchResult: (teamAId: string, teamBId: string, scoreA: number, scoreB: number) => Promise<void>;
   triggerGachaLottery: () => Promise<void>;
+  standings: StandingsData | null;
+  bracket: BracketData | null;
+  syncStandingsAndBracket: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -119,6 +122,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [metadata, setMetadata] = useState<(SystemMetadata & { latestMatches?: MatchLog[] }) | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [standings, setStandings] = useState<StandingsData | null>(null);
+  const [bracket, setBracket] = useState<BracketData | null>(null);
   
   // Lobby multi-game states
   const [games, setGames] = useState<Game[]>([]);
@@ -1274,6 +1279,202 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // 4.7. FETCH STANDINGS AND KNOCKOUT BRACKET FROM API-FOOTBALL
+  const syncStandingsAndBracket = async () => {
+    if (!currentGameId) return;
+    setError(null);
+    setActionLoading(true);
+    try {
+      // 1. Retrieve secure credentials from Firestore config/api_football
+      const configRef = doc(db, "config", "api_football");
+      const configSnap = await getDoc(configRef);
+      
+      let apiKey = "7803ef1e55184a6e4b4a6a6d16f29951";
+      let baseUrl = "https://v3.football.api-sports.io";
+      let leagueId = "1";
+      let season = "2026";
+
+      if (configSnap.exists()) {
+        const configData = configSnap.data();
+        apiKey = configData.apiKey || apiKey;
+        baseUrl = configData.baseUrl || baseUrl;
+        leagueId = configData.leagueId || leagueId;
+        season = configData.season || season;
+      } else if (user?.email?.toLowerCase() === "yusufma9292@gmail.com") {
+        await setDoc(configRef, {
+          apiKey,
+          baseUrl,
+          leagueId,
+          season,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      // Helper function for name normalization
+      const allowedTeams = [
+        "France", "Spain", "Argentina", "England", "Portugal", "Brazil", "Netherlands", "Germany",
+        "Uruguay", "United States", "Mexico", "Senegal", "Colombia", "Croatia", "Belgium", "Morocco",
+        "Japan", "Switzerland", "Iran", "Türkiye", "Ecuador", "Austria", "Australia", "South Korea",
+        "Paraguay", "Sweden", "Côte d'Ivoire", "Panama", "Norway", "Canada", "Algeria", "Egypt",
+        "Czechia", "Scotland", "Tunisia", "DR Congo", "Uzbekistan", "Qatar", "Iraq", "South Africa",
+        "New Zealand", "Haiti", "Curaçao", "Ghana", "Cape Verde", "Bosnia & Herzegovina", "Jordan", "Saudi Arabia"
+      ];
+
+      const mapApiFootballTeamName = (name: string): string => {
+        const mapping: Record<string, string> = {
+          "usa": "United States",
+          "united states": "United States",
+          "korea republic": "South Korea",
+          "south korea": "South Korea",
+          "ivory coast": "Côte d'Ivoire",
+          "cote d'ivoire": "Côte d'Ivoire",
+          "czech republic": "Czechia",
+          "czechia": "Czechia",
+          "bosnia and herzegovina": "Bosnia & Herzegovina",
+          "bosnia-herzegovina": "Bosnia & Herzegovina",
+          "bosnia & herzegovina": "Bosnia & Herzegovina",
+          "dr congo": "DR Congo",
+          "congo dr": "DR Congo",
+          "turkey": "Türkiye",
+          "türkiye": "Türkiye",
+          "curacao": "Curaçao",
+          "curaçao": "Curaçao"
+        };
+        const key = name.toLowerCase().trim();
+        if (mapping[key]) return mapping[key];
+        
+        const found = allowedTeams.find(c => c.toLowerCase() === key);
+        return found || name;
+      };
+
+      // 2. Fetch Standings from API-Football
+      const standingsUrl = `${baseUrl}/standings?league=${leagueId}&season=${season}`;
+      const standingsResponse = await fetch(standingsUrl, {
+        method: "GET",
+        headers: { "x-apisports-key": apiKey }
+      });
+
+      if (!standingsResponse.ok) {
+        throw new Error(`Gagal mengambil data klasemen (HTTP ${standingsResponse.status})`);
+      }
+
+      const standingsData = await standingsResponse.json();
+      if (standingsData.errors && Object.keys(standingsData.errors).length > 0) {
+        throw new Error(`API-Football standings error: ${JSON.stringify(standingsData.errors)}`);
+      }
+
+      const rawStandings = standingsData.response?.[0]?.league?.standings;
+      const parsedGroups: GroupStanding[] = [];
+
+      if (Array.isArray(rawStandings)) {
+        rawStandings.forEach((groupData: any) => {
+          if (Array.isArray(groupData) && groupData.length > 0) {
+            const groupName = groupData[0].group;
+            const teamsStanding = groupData.map((item: any) => ({
+              rank: item.rank,
+              name: mapApiFootballTeamName(item.team.name),
+              logo: item.team.logo,
+              points: item.points,
+              played: item.all.played,
+              win: item.all.win,
+              draw: item.all.draw,
+              lose: item.all.lose,
+              goalsFor: item.all.goals.for,
+              goalsAgainst: item.all.goals.against,
+              goalsDiff: item.goalsDiff
+            }));
+
+            parsedGroups.push({
+              name: groupName,
+              teams: teamsStanding
+            });
+          }
+        });
+      }
+
+      // 3. Fetch Fixtures (Bracket) from API-Football
+      const fixturesUrl = `${baseUrl}/fixtures?league=${leagueId}&season=${season}`;
+      const fixturesResponse = await fetch(fixturesUrl, {
+        method: "GET",
+        headers: { "x-apisports-key": apiKey }
+      });
+
+      if (!fixturesResponse.ok) {
+        throw new Error(`Gagal mengambil data bracket (HTTP ${fixturesResponse.status})`);
+      }
+
+      const fixturesData = await fixturesResponse.json();
+      if (fixturesData.errors && Object.keys(fixturesData.errors).length > 0) {
+        throw new Error(`API-Football fixtures error: ${JSON.stringify(fixturesData.errors)}`);
+      }
+
+      const rawFixtures = fixturesData.response;
+      const bracketRounds: Record<string, BracketMatch[]> = {
+        "Round of 32": [],
+        "Round of 16": [],
+        "Quarter-finals": [],
+        "Semi-finals": [],
+        "Final": [],
+        "Third place play-off": []
+      };
+
+      if (Array.isArray(rawFixtures)) {
+        rawFixtures.forEach((f: any) => {
+          const roundName = f.fixture.round;
+          
+          // Check if this round matches our targeted bracket rounds
+          const matchedRoundKey = Object.keys(bracketRounds).find(key => 
+            roundName.toLowerCase().includes(key.toLowerCase())
+          );
+
+          if (matchedRoundKey) {
+            bracketRounds[matchedRoundKey].push({
+              id: f.fixture.id,
+              date: f.fixture.date,
+              homeTeam: mapApiFootballTeamName(f.teams.home.name),
+              awayTeam: mapApiFootballTeamName(f.teams.away.name),
+              homeLogo: f.teams.home.logo,
+              awayLogo: f.teams.away.logo,
+              homeScore: f.goals.home,
+              awayScore: f.goals.away,
+              homePen: f.score.penalty.home,
+              awayPen: f.score.penalty.away,
+              status: f.fixture.status.short,
+              round: matchedRoundKey,
+              winner: f.teams.home.winner ? "home" : (f.teams.away.winner ? "away" : null)
+            });
+          }
+        });
+      }
+
+      // Sort matches inside each round by date/time
+      Object.keys(bracketRounds).forEach(roundKey => {
+        bracketRounds[roundKey].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      });
+
+      // 4. Save Standings and Bracket to Firestore under separate docs
+      const standingsDocRef = doc(db, "games", currentGameId, "standings", "data");
+      const bracketDocRef = doc(db, "games", currentGameId, "bracket", "data");
+
+      await setDoc(standingsDocRef, {
+        groups: parsedGroups,
+        lastUpdated: serverTimestamp()
+      });
+
+      await setDoc(bracketDocRef, {
+        rounds: bracketRounds,
+        lastUpdated: serverTimestamp()
+      });
+
+      console.log("Successfully synced standings and brackets.");
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || "Gagal menyinkronkan klasemen & bracket.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Google Authentication state setup
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -1320,6 +1521,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUsers([]);
       setMetadata(null);
       setCurrentGame(null);
+      setStandings(null);
+      setBracket(null);
       return;
     }
 
@@ -1381,11 +1584,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       handleFirestoreError(err, OperationType.LIST, `games/${currentGameId}/players`);
     });
 
+    // 5. Observe standings document
+    const standingsRef = doc(db, "games", currentGameId, "standings", "data");
+    const unsubscribeStandings = onSnapshot(standingsRef, (snap) => {
+      if (snap.exists()) {
+        setStandings(snap.data() as StandingsData);
+      } else {
+        setStandings(null);
+      }
+    }, (err) => {
+      console.error("Error observing standings:", err);
+    });
+
+    // 6. Observe bracket document
+    const bracketRef = doc(db, "games", currentGameId, "bracket", "data");
+    const unsubscribeBracket = onSnapshot(bracketRef, (snap) => {
+      if (snap.exists()) {
+        setBracket(snap.data() as BracketData);
+      } else {
+        setBracket(null);
+      }
+    }, (err) => {
+      console.error("Error observing bracket:", err);
+    });
+
     return () => {
       unsubscribeGameMeta();
       unsubscribePlayerProfile();
       unsubscribeGameTeams();
       unsubscribeGamePlayers();
+      unsubscribeStandings();
+      unsubscribeBracket();
     };
   }, [user, currentGameId]);
 
@@ -1439,7 +1668,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchAndApplyRealResults,
       syncMatchesFromApiFootball,
       applyManualMatchResult,
-      triggerGachaLottery
+      triggerGachaLottery,
+      standings,
+      bracket,
+      syncStandingsAndBracket
     }}>
       {children}
     </AuthContext.Provider>

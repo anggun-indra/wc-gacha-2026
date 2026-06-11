@@ -130,6 +130,18 @@ service cloud.firestore {
           )
         );
       }
+
+      // Standings subcollection
+      match /standings/data {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+
+      // Bracket subcollection
+      match /bracket/data {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
     }
   }
 }

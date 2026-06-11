@@ -1,10 +1,10 @@
 import React from "react";
 import { useAuth } from "../context/AuthContext";
-import { LogOut, RefreshCw, Calendar, Flame, Sparkles, TrendingUp, HelpCircle, ShieldCheck } from "lucide-react";
+import { LogOut, RefreshCw, Calendar, Flame, Sparkles, TrendingUp, HelpCircle, ShieldCheck, Trophy } from "lucide-react";
 import { getFlagUrl } from "../lib/flags";
 
 export const Dashboard: React.FC = () => {
-  const { user, profile, metadata, teams, logOut, simulateMatchDay, fetchAndApplyRealResults, syncMatchesFromApiFootball, applyManualMatchResult, triggerGachaLottery, actionLoading } = useAuth();
+  const { user, profile, metadata, teams, logOut, simulateMatchDay, fetchAndApplyRealResults, syncMatchesFromApiFootball, applyManualMatchResult, triggerGachaLottery, syncStandingsAndBracket, actionLoading } = useAuth();
   const [selectedDate, setSelectedDate] = React.useState("2026-06-11");
   const [manualTeamA, setManualTeamA] = React.useState("");
   const [manualTeamB, setManualTeamB] = React.useState("");
@@ -486,7 +486,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-2 space-y-2">
                     <button
                       type="button"
                       onClick={() => syncMatchesFromApiFootball(selectedDate)}
@@ -495,6 +495,16 @@ export const Dashboard: React.FC = () => {
                     >
                       <Sparkles className="h-3.5 w-3.5 text-white" />
                       {actionLoading ? "Menyinkronkan..." : "Sinkronisasi Skor Asli"}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => syncStandingsAndBracket()}
+                      disabled={actionLoading}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-950/30 hover:bg-emerald-900/40 active:scale-[0.98] py-2.5 text-center font-sans text-xs font-bold text-emerald-300 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md"
+                    >
+                      <Trophy className="h-3.5 w-3.5 text-emerald-400" />
+                      {actionLoading ? "Menyinkronkan..." : "Sinkronisasi Klasemen & Bagan"}
                     </button>
                   </div>
                 </div>

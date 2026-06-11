@@ -1,13 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Login } from "./components/Login";
 import { Lobby } from "./components/Lobby";
 import { Dashboard } from "./components/Dashboard";
 import { Leaderboard } from "./components/Leaderboard";
-import { Trophy, ShieldCheck, Loader2, Sparkles, ArrowLeft, Calendar } from "lucide-react";
+import { StandingsAndBracket } from "./components/StandingsAndBracket";
+import { Trophy, ShieldCheck, Loader2, Sparkles, ArrowLeft, Calendar, LayoutDashboard } from "lucide-react";
 
 const AppContent: React.FC = () => {
   const { user, loading, metadata, currentGameId, currentGame, setCurrentGameId } = useAuth();
+  const [activeTab, setActiveTab] = useState<"dashboard" | "standings">("dashboard");
 
   // Loading skeleton screen
   if (loading) {
@@ -84,43 +86,74 @@ const AppContent: React.FC = () => {
           </div>
         </nav>
 
+        {/* Tab Navigation System */}
+        <div className="flex gap-2 p-1.5 bg-slate-900/40 rounded-2xl border border-slate-800/80 w-max shadow-2xl backdrop-blur-md">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase rounded-xl transition cursor-pointer ${
+              activeTab === "dashboard"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/40"
+            }`}
+          >
+            <LayoutDashboard className="h-4 w-4" />
+            Dashboard Prediksi
+          </button>
+          <button
+            onClick={() => setActiveTab("standings")}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase rounded-xl transition cursor-pointer ${
+              activeTab === "standings"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/40"
+            }`}
+          >
+            <Trophy className="h-4 w-4" />
+            Klasemen Real & Bracket
+          </button>
+        </div>
+
         {/* Primary Screen content Columns */}
-        <main className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          
-          {/* LEFT: Participant Squads View, simulations and latest log */}
-          <div className="lg:col-span-2 space-y-6">
-            <Dashboard />
-          </div>
+        {activeTab === "dashboard" ? (
+          <main className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* LEFT: Participant Squads View, simulations and latest log */}
+            <div className="lg:col-span-2 space-y-6">
+              <Dashboard />
+            </div>
 
-          {/* RIGHT: Selected Room Leaderboard, statistics & background system data */}
-          <div className="lg:col-span-1 space-y-6">
-            <Leaderboard />
+            {/* RIGHT: Selected Room Leaderboard, statistics & background system data */}
+            <div className="lg:col-span-1 space-y-6">
+              <Leaderboard />
 
-            {/* Quick Informative Info Block */}
-            <div className="card-glass p-5 rounded-3xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl" />
-              <div className="flex items-center gap-2.5 mb-3">
-                <Sparkles className="h-4.5 w-4.5 text-indigo-400" />
-                <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-slate-300">
-                  Pelari Latar Belakang (Lazy Update)
-                </h3>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed mb-3">
-                Skor harian disinkronisasikan secara otomatis pada kedatangan klien pertama di esok harinya. Hal ini memotong biaya infrastruktur menjadi 100% serverless dan gratis.
-              </p>
-              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                <span className="text-[10px] text-slate-500 uppercase font-mono block">Terakhir Diperbaharui</span>
-                <span className="text-xs font-mono text-indigo-300 font-semibold block mt-1">
-                  {metadata?.lastUpdated ? (
-                    metadata.lastUpdated.toDate 
-                      ? metadata.lastUpdated.toDate().toLocaleString("id-ID")
-                      : new Date(metadata.lastUpdated).toLocaleString("id-ID")
-                  ) : "-"}
-                </span>
+              {/* Quick Informative Info Block */}
+              <div className="card-glass p-5 rounded-3xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl" />
+                <div className="flex items-center gap-2.5 mb-3">
+                  <Sparkles className="h-4.5 w-4.5 text-indigo-400" />
+                  <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Pelari Latar Belakang (Lazy Update)
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed mb-3">
+                  Skor harian disinkronisasikan secara otomatis pada kedatangan klien pertama di esok harinya. Hal ini memotong biaya infrastruktur menjadi 100% serverless dan gratis.
+                </p>
+                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                  <span className="text-[10px] text-slate-550 text-slate-500 uppercase font-mono block">Terakhir Diperbaharui</span>
+                  <span className="text-xs font-mono text-indigo-300 font-semibold block mt-1">
+                    {metadata?.lastUpdated ? (
+                      metadata.lastUpdated.toDate 
+                        ? metadata.lastUpdated.toDate().toLocaleString("id-ID")
+                        : new Date(metadata.lastUpdated).toLocaleString("id-ID")
+                    ) : "-"}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="space-y-6">
+            <StandingsAndBracket />
+          </main>
+        )}
 
         {/* Global footer layout */}
         <footer className="flex flex-col sm:flex-row justify-between items-center px-5 py-3 bg-slate-900/15 rounded-2xl border border-slate-800/80 text-[10px] text-slate-505 text-slate-500 uppercase tracking-widest gap-2">

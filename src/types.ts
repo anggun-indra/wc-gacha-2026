@@ -58,3 +58,48 @@ export interface Game {
   latestMatches?: MatchLog[];
   playerIds?: string[];
 }
+
+export interface GroupTeamStanding {
+  rank: number;
+  name: string;
+  logo: string;
+  points: number;
+  played: number;
+  win: number;
+  draw: number;
+  lose: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalsDiff: number;
+}
+
+export interface GroupStanding {
+  name: string;
+  teams: GroupTeamStanding[];
+}
+
+export interface BracketMatch {
+  id: number;
+  date: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeLogo: string;
+  awayLogo: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  homePen: number | null;
+  awayPen: number | null;
+  status: string;
+  round: string;
+  winner: string | null;
+}
+
+export interface StandingsData {
+  groups: GroupStanding[];
+  lastUpdated: any;
+}
+
+export interface BracketData {
+  rounds: Record<string, BracketMatch[]>;
+  lastUpdated: any;
+}
