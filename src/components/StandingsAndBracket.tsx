@@ -18,6 +18,30 @@ export const StandingsAndBracket: React.FC = () => {
     "Final": "Final"
   };
 
+  // Pre-defined chronological order of rounds
+  const orderedRounds = [
+    "Round of 32",
+    "Round of 16",
+    "Quarter-finals",
+    "Semi-finals",
+    "Third place play-off",
+    "Final"
+  ];
+
+  // Sort available round keys chronologically
+  const sortedRoundKeys = Object.keys(bracket?.rounds || {}).sort((a, b) => {
+    let indexA = orderedRounds.indexOf(a);
+    let indexB = orderedRounds.indexOf(b);
+    if (indexA === -1) indexA = 999;
+    if (indexB === -1) indexB = 999;
+    return indexA - indexB;
+  });
+
+  // Determine active round (falls back to first available if default "Round of 32" is not present)
+  const activeRound = sortedRoundKeys.includes(selectedBracketRound)
+    ? selectedBracketRound
+    : (sortedRoundKeys[0] || "Round of 32");
+
   return (
     <div className="space-y-6">
       {/* Tab Navigation header inside Standings component */}
@@ -158,14 +182,14 @@ export const StandingsAndBracket: React.FC = () => {
             <div className="space-y-6">
               {/* Round Selector Subtab bar */}
               <div className="flex flex-wrap gap-1.5 p-1 bg-slate-900/60 rounded-xl border border-slate-850 border-slate-800/40 w-max max-w-full overflow-x-auto">
-                {Object.keys(bracket.rounds).map((roundKey) => {
+                {sortedRoundKeys.map((roundKey) => {
                   const hasMatches = bracket.rounds[roundKey]?.length > 0;
                   return (
                     <button
                       key={roundKey}
                       onClick={() => setSelectedBracketRound(roundKey)}
                       className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition uppercase tracking-wider shrink-0 cursor-pointer ${
-                        selectedBracketRound === roundKey
+                        activeRound === roundKey
                           ? "bg-indigo-600/30 text-indigo-200 border border-indigo-500/30"
                           : "text-slate-400 hover:text-white border border-transparent"
                       }`}
@@ -182,15 +206,15 @@ export const StandingsAndBracket: React.FC = () => {
               </div>
 
               {/* Match Cards List */}
-              {!bracket.rounds[selectedBracketRound] || bracket.rounds[selectedBracketRound].length === 0 ? (
+              {!bracket.rounds[activeRound] || bracket.rounds[activeRound].length === 0 ? (
                 <div className="card-glass rounded-2xl p-6 text-center border-slate-800/60">
                   <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                    Belum ada pertandingan dijadwalkan atau dimulai di babak **{roundDisplayNames[selectedBracketRound] || selectedBracketRound}** ini.
+                    Belum ada pertandingan dijadwalkan atau dimulai di babak **{roundDisplayNames[activeRound] || activeRound}** ini.
                   </p>
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {bracket.rounds[selectedBracketRound].map((match, mIdx) => {
+                  {bracket.rounds[activeRound].map((match, mIdx) => {
                     const finished = ["FT", "AET", "PEN"].includes(match.status);
                     
                     const winnerHome = match.winner === "home";
