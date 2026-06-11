@@ -4,7 +4,7 @@ import { LogOut, RefreshCw, Calendar, Flame, Sparkles, TrendingUp, HelpCircle, S
 import { getFlagUrl } from "../lib/flags";
 
 export const Dashboard: React.FC = () => {
-  const { user, profile, metadata, teams, logOut, simulateMatchDay, fetchAndApplyRealResults, applyManualMatchResult, triggerGachaLottery, actionLoading } = useAuth();
+  const { user, profile, metadata, teams, logOut, simulateMatchDay, fetchAndApplyRealResults, syncMatchesFromApiFootball, applyManualMatchResult, triggerGachaLottery, actionLoading } = useAuth();
   const [selectedDate, setSelectedDate] = React.useState("2026-06-11");
   const [manualTeamA, setManualTeamA] = React.useState("");
   const [manualTeamB, setManualTeamB] = React.useState("");
@@ -420,142 +420,181 @@ export const Dashboard: React.FC = () => {
           )}
 
           {/* 4. Manual / Dynamic Simulation Update Tester */}
-          <div className="card-glass rounded-3xl p-6 border-slate-800/60 space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <h4 className="font-sans text-sm font-bold text-white flex items-center gap-2">
-                  <ShieldCheck className="h-4.5 w-4.5 text-indigo-400" />
-                  Sistem Pembaruan Hasil Pertandingan
-                </h4>
-                <p className="mt-1 text-xs text-slate-400">
-                  Pilih metode pembaruan hasil pertandingan Piala Dunia di bawah ini untuk memperbarui klasemen.
-                </p>
+          {user?.email?.toLowerCase() === "yusufma9292@gmail.com" && (
+            <div className="card-glass rounded-3xl p-6 border-slate-800/60 space-y-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h4 className="font-sans text-sm font-bold text-white flex items-center gap-2">
+                    <ShieldCheck className="h-4.5 w-4.5 text-indigo-400" />
+                    Sistem Pembaruan Hasil Pertandingan
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Pilih metode pembaruan hasil pertandingan Piala Dunia di bawah ini untuk memperbarui klasemen.
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="grid md:grid-cols-2 gap-5">
-              {/* Option A: Simulated (RNG) */}
-              <div className="rounded-2xl border border-indigo-500/20 bg-indigo-950/5 p-5 space-y-4 flex flex-col justify-between">
-                <div className="space-y-3">
+              <div className="grid md:grid-cols-3 gap-5">
+                {/* Option A: Simulated (RNG) */}
+                <div className="rounded-2xl border border-indigo-500/20 bg-indigo-950/5 p-5 space-y-4 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <RefreshCw className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="font-sans text-[11px] font-bold text-indigo-300 uppercase tracking-wider">A. Simulasi Kejuaraan (RNG)</h5>
+                        <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+                          Simulasikan hasil pertandingan acak secara instan berdasarkan kekuatan tier masing-masing negara (France, Brazil, Argentina memiliki probabilitas menang lebih besar).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => simulateMatchDay()}
+                      disabled={actionLoading}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] py-2.5 text-center font-sans text-xs font-bold text-white transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 text-white ${actionLoading ? "animate-spin" : ""}`} />
+                      {actionLoading ? "Menyimulasikan..." : "Simulasikan Hari Acak Baru"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Option B: API Football Sync */}
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-5 space-y-4 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Calendar className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="font-sans text-[11px] font-bold text-emerald-300 uppercase tracking-wider">B. Tarik Hasil Asli (API Football)</h5>
+                        <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
+                          Tarik skor real-time pertandingan Piala Dunia 2026 langsung dari API-Football untuk memperbarui klasemen.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[10px] text-slate-400 shrink-0 font-medium font-sans">Pilih Tanggal:</span>
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="flex-1 bg-slate-905 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white outline-indigo-500 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => syncMatchesFromApiFootball(selectedDate)}
+                      disabled={actionLoading}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] py-2.5 text-center font-sans text-xs font-bold text-white transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-white" />
+                      {actionLoading ? "Menyinkronkan..." : "Sinkronisasi Skor Asli"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Option C: Manual Entry Form */}
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-950/5 p-5 space-y-4">
                   <div className="flex items-start gap-3">
-                    <RefreshCw className="h-5 w-5 text-indigo-400 shrink-0 mt-0.5" />
+                    <Flame className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
                     <div>
-                      <h5 className="font-sans text-[11px] font-bold text-indigo-300 uppercase tracking-wider">A. Simulasi Kejuaraan (RNG)</h5>
+                      <h5 className="font-sans text-[11px] font-bold text-amber-300 uppercase tracking-wider">C. Input Hasil Manual</h5>
                       <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
-                        Simulasikan hasil pertandingan acak secara instan berdasarkan kekuatan tier masing-masing negara (France, Brazil, Argentina memiliki probabilitas menang lebih besar).
+                        Masukkan hasil skor pertandingan secara mandiri demi memperbarui klasemen klasifikasi secara instan.
                       </p>
                     </div>
                   </div>
-                </div>
 
-                <div className="pt-2">
+                  <div className="grid sm:grid-cols-2 gap-4 pt-1">
+                    {/* Team A Picker */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-sans block">Tim A:</label>
+                      <select
+                        value={manualTeamA}
+                        onChange={(e) => setManualTeamA(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-indigo-500 font-sans"
+                      >
+                        <option value="">-- Pilih Tim A --</option>
+                        {teams.map((t) => (
+                          <option key={`manual-a-${t.id}`} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Team B Picker */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-sans block">Tim B:</label>
+                      <select
+                        value={manualTeamB}
+                        onChange={(e) => setManualTeamB(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-indigo-500 font-sans"
+                      >
+                        <option value="">-- Pilih Tim B --</option>
+                        {teams.map((t) => (
+                          <option key={`manual-b-${t.id}`} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pb-1">
+                    {/* Score A Input */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-sans block">Skor Tim A:</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={manualScoreA}
+                        onChange={(e) => setManualScoreA(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-indigo-500 font-mono"
+                      />
+                    </div>
+
+                    {/* Score B Input */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-sans block">Skor Tim B:</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={manualScoreB}
+                        onChange={(e) => setManualScoreB(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-indigo-500 font-mono"
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => simulateMatchDay()}
-                    disabled={actionLoading}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] py-2.5 text-center font-sans text-xs font-bold text-white transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md"
+                    onClick={async () => {
+                      if (!manualTeamA || !manualTeamB) return;
+                      await applyManualMatchResult(manualTeamA, manualTeamB, manualScoreA, manualScoreB);
+                      setManualScoreA(0);
+                      setManualScoreB(0);
+                    }}
+                    disabled={actionLoading || !manualTeamA || !manualTeamB}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 active:scale-[0.98] py-2.5 text-center font-sans text-xs font-bold text-white transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md"
                   >
-                    <RefreshCw className={`h-3.5 w-3.5 text-white ${actionLoading ? "animate-spin" : ""}`} />
-                    {actionLoading ? "Menyimulasikan..." : "Simulasikan Hari Acak Baru"}
+                    <Flame className="h-3.5 w-3.5 text-white" />
+                    {actionLoading ? "Memproses Pembaruan..." : "Terapkan Hasil"}
                   </button>
                 </div>
               </div>
-
-              {/* Option B: Manual Entry Form */}
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-950/5 p-5 space-y-4">
-                <div className="flex items-start gap-3">
-                  <Flame className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
-                  <div>
-                    <h5 className="font-sans text-[11px] font-bold text-amber-300 uppercase tracking-wider">B. Input Hasil Pertandingan Manual</h5>
-                    <p className="mt-1 text-[11px] text-slate-400 leading-relaxed">
-                      Masukkan hasil skor pertandingan secara mandiri demi memperbarui klasemen klasifikasi secara instan.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-4 pt-1">
-                  {/* Team A Picker */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-400 font-sans block">Tim A:</label>
-                    <select
-                      value={manualTeamA}
-                      onChange={(e) => setManualTeamA(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-indigo-500 font-sans"
-                    >
-                      <option value="">-- Pilih Tim A --</option>
-                      {teams.map((t) => (
-                        <option key={`manual-a-${t.id}`} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Team B Picker */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-400 font-sans block">Tim B:</label>
-                    <select
-                      value={manualTeamB}
-                      onChange={(e) => setManualTeamB(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-indigo-500 font-sans"
-                    >
-                      <option value="">-- Pilih Tim B --</option>
-                      {teams.map((t) => (
-                        <option key={`manual-b-${t.id}`} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pb-1">
-                  {/* Score A Input */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-400 font-sans block">Skor Tim A:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={manualScoreA}
-                      onChange={(e) => setManualScoreA(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-indigo-500 font-mono"
-                    />
-                  </div>
-
-                  {/* Score B Input */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-400 font-sans block">Skor Tim B:</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={manualScoreB}
-                      onChange={(e) => setManualScoreB(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-indigo-500 font-mono"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!manualTeamA || !manualTeamB) return;
-                    await applyManualMatchResult(manualTeamA, manualTeamB, manualScoreA, manualScoreB);
-                    setManualScoreA(0);
-                    setManualScoreB(0);
-                  }}
-                  disabled={actionLoading || !manualTeamA || !manualTeamB}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 active:scale-[0.98] py-2.5 text-center font-sans text-xs font-bold text-white transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md"
-                >
-                  <Flame className="h-3.5 w-3.5 text-white" />
-                  {actionLoading ? "Memproses Pembaruan..." : "Terapkan Hasil Pertandingan"}
-                </button>
-              </div>
+              
+              <p className="text-[10px] text-center text-slate-500 leading-normal font-sans">
+                *Tarik Hasil Asli menggunakan Google Search Grounding memerlukan tanggal aktif saat World Cup 2026 berlangsung (dimulai Juni 11, 2026).
+              </p>
             </div>
-            
-            <p className="text-[10px] text-center text-slate-500 leading-normal font-sans">
-              *Tarik Hasil Asli menggunakan Google Search Grounding memerlukan tanggal aktif saat World Cup 2026 berlangsung (dimulai Juni 11, 2026).
-            </p>
-          </div>
+          )}
         </div>
       )}
     </div>

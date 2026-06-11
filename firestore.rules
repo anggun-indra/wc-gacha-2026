@@ -23,6 +23,11 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    // Config Collection for secure API credentials
+    match /config/api_football {
+      allow read, write: if isAdmin();
+    }
+
     // Modern Users Collection (Global directory registration)
     match /users/{userId} {
       allow read: if isSignedIn();

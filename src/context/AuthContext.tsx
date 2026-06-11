@@ -43,6 +43,7 @@ interface AuthContextType {
   fillTeams: (gameId: string) => Promise<void>;
   joinGame: (gameId: string) => Promise<void>;
   fetchAndApplyRealResults: (dateStr: string) => Promise<void>;
+  syncMatchesFromApiFootball: (dateStr: string) => Promise<void>;
   applyManualMatchResult: (teamAId: string, teamBId: string, scoreA: number, scoreB: number) => Promise<void>;
   triggerGachaLottery: () => Promise<void>;
 }
@@ -941,6 +942,213 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const syncMatchesFromApiFootball = async (dateStr: string) => {
+    if (!currentGameId) return;
+    setError(null);
+    setActionLoading(true);
+    try {
+      // Retrieve secure credentials from Firestore config/api_football
+      const configRef = doc(db, "config", "api_football");
+      const configSnap = await getDoc(configRef);
+      
+      let apiKey = "7803ef1e55184a6e4b4a6a6d16f29951";
+      let baseUrl = "https://v3.football.api-sports.io";
+      let leagueId = "1";
+      let season = "2026";
+
+      if (configSnap.exists()) {
+        const configData = configSnap.data();
+        apiKey = configData.apiKey || apiKey;
+        baseUrl = configData.baseUrl || baseUrl;
+        leagueId = configData.leagueId || leagueId;
+        season = configData.season || season;
+      } else if (user?.email?.toLowerCase() === "yusufma9292@gmail.com") {
+        // Automatically seed the configuration if it is not present in Firestore
+        await setDoc(configRef, {
+          apiKey,
+          baseUrl,
+          leagueId,
+          season,
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      const url = `${baseUrl}/fixtures?league=${leagueId}&season=${season}&date=${dateStr}`;
+      
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "x-apisports-key": apiKey
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Gagal menghubungi API-Football (HTTP ${response.status})`);
+      }
+      
+      const data = await response.json();
+      if (data.errors && Object.keys(data.errors).length > 0) {
+        const errDesc = JSON.stringify(data.errors);
+        throw new Error(`API-Football error: ${errDesc}`);
+      }
+      
+      const fixtures = data.response;
+      if (!Array.isArray(fixtures) || fixtures.length === 0) {
+        throw new Error(`Tidak ditemukan pertandingan Piala Dunia pada tanggal ${dateStr} di API-Football.`);
+      }
+
+      const completedFixtures = fixtures.filter(f => 
+        f.goals.home !== null && 
+        f.goals.away !== null &&
+        ["FT", "AET", "PEN"].includes(f.fixture.status.short)
+      );
+
+      if (completedFixtures.length === 0) {
+        throw new Error(`Ditemukan ${fixtures.length} pertandingan tapi belum ada yang selesai (status FT/AET/PEN atau skor masih kosong).`);
+      }
+
+      const allowedTeams = [
+        "France", "Spain", "Argentina", "England", "Portugal", "Brazil", "Netherlands", "Germany",
+        "Uruguay", "United States", "Mexico", "Senegal", "Colombia", "Croatia", "Belgium", "Morocco",
+        "Japan", "Switzerland", "Iran", "Türkiye", "Ecuador", "Austria", "Australia", "South Korea",
+        "Paraguay", "Sweden", "Côte d'Ivoire", "Panama", "Norway", "Canada", "Algeria", "Egypt",
+        "Czechia", "Scotland", "Tunisia", "DR Congo", "Uzbekistan", "Qatar", "Iraq", "South Africa",
+        "New Zealand", "Haiti", "Curaçao", "Ghana", "Cape Verde", "Bosnia & Herzegovina", "Jordan", "Saudi Arabia"
+      ];
+
+      const mapApiFootballTeamName = (name: string): string => {
+        const mapping: Record<string, string> = {
+          "usa": "United States",
+          "united states": "United States",
+          "korea republic": "South Korea",
+          "south korea": "South Korea",
+          "ivory coast": "Côte d'Ivoire",
+          "cote d'ivoire": "Côte d'Ivoire",
+          "czech republic": "Czechia",
+          "czechia": "Czechia",
+          "bosnia and herzegovina": "Bosnia & Herzegovina",
+          "bosnia-herzegovina": "Bosnia & Herzegovina",
+          "bosnia & herzegovina": "Bosnia & Herzegovina",
+          "dr congo": "DR Congo",
+          "congo dr": "DR Congo"
+        };
+        const key = name.toLowerCase().trim();
+        if (mapping[key]) return mapping[key];
+        
+        const found = allowedTeams.find(c => c.toLowerCase() === key);
+        return found || name;
+      };
+
+      const gameRef = doc(db, "games", currentGameId);
+      const teamsColRef = collection(db, "games", currentGameId, "teams");
+
+      const teamsSnapshot = await getDocs(teamsColRef);
+      const teamDocuments: Team[] = [];
+      teamsSnapshot.forEach((docSnap) => {
+        teamDocuments.push(docSnap.data() as Team);
+      });
+
+      if (teamDocuments.length !== 48) {
+        throw new Error("Negara peserta tidak lengkap (harus 48 negara di game ini).");
+      }
+
+      const dailyMatches: MatchLog[] = [];
+
+      completedFixtures.forEach((fixtureItem) => {
+        const homeMapped = mapApiFootballTeamName(fixtureItem.teams.home.name);
+        const awayMapped = mapApiFootballTeamName(fixtureItem.teams.away.name);
+
+        const teamA = teamDocuments.find(t => t.name.toLowerCase() === homeMapped.toLowerCase());
+        const teamB = teamDocuments.find(t => t.name.toLowerCase() === awayMapped.toLowerCase());
+
+        if (teamA && teamB) {
+          const goalsA = Number(fixtureItem.goals.home);
+          const goalsB = Number(fixtureItem.goals.away);
+
+          let pointsA = 0;
+          let pointsB = 0;
+
+          if (goalsA > goalsB) {
+            pointsA = 3;
+          } else if (goalsA < goalsB) {
+            pointsB = 3;
+          } else {
+            pointsA = 1;
+            pointsB = 1;
+          }
+
+          teamA.points += pointsA;
+          teamB.points += pointsB;
+
+          dailyMatches.push({
+            teamA: teamA.name,
+            teamB: teamB.name,
+            scoreA: goalsA,
+            scoreB: goalsB
+          });
+        }
+      });
+
+      if (dailyMatches.length === 0) {
+        throw new Error("Nama-nama negara dari API-Football tidak cocok dengan database 48 negara Anda. Tidak ada hasil yang diperbarui.");
+      }
+
+      await runTransaction(db, async (transaction) => {
+        const gameSnap = await transaction.get(gameRef);
+        if (!gameSnap.exists()) return;
+
+        const gameData = gameSnap.data() as Game;
+        if (!gameData.gachaTriggered) {
+          throw new Error("Gacha harus di-trigger terlebih dahulu sebelum memperbarui pertandingan!");
+        }
+
+        const nextDay = (gameData.dayCounter || 0) + 1;
+
+        const teamWeights = teamDocuments.map((t) => {
+          let baseWeight = 1.0;
+          if (t.tier === "favorit") baseWeight = 8.0;
+          else if (t.tier === "dark") baseWeight = 6.0;
+          else if (t.tier === "menengah_atas") baseWeight = 4.0;
+          else if (t.tier === "menengah") baseWeight = 2.5;
+          else if (t.tier === "underdog_kompetitif") baseWeight = 1.5;
+          else if (t.tier === "underdog_berat") baseWeight = 0.5;
+
+          const scoreWeight = t.points * 1.5;
+          return { id: t.id, weight: baseWeight + scoreWeight };
+        });
+
+        const totalWeight = teamWeights.reduce((sum, item) => sum + item.weight, 0);
+
+        teamDocuments.forEach((team) => {
+          const weightObj = teamWeights.find(w => w.id === team.id);
+          const rawProb = weightObj ? (weightObj.weight / totalWeight) * 100 : 2.083;
+          team.probability = Math.round(rawProb * 10) / 10;
+        });
+
+        teamDocuments.forEach((team) => {
+          const teamRef = doc(db, "games", currentGameId, "teams", team.id);
+          transaction.update(teamRef, {
+            points: team.points,
+            probability: team.probability
+          });
+        });
+
+        transaction.update(gameRef, {
+          dayCounter: nextDay,
+          lastUpdated: serverTimestamp(),
+          latestMatches: dailyMatches
+        });
+      });
+
+      console.log(`Successfully fetched and applied ${completedFixtures.length} matches from API-Football for date ${dateStr}`);
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || "Gagal menarik data dari API-Football.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // 4.6. APPLY MANUAL MATCH RESULT FOR ANY TWO TEAMS (FALLBACK UPDATE)
   const applyManualMatchResult = async (teamAId: string, teamBId: string, scoreA: number, scoreB: number) => {
     if (!currentGameId) return;
@@ -1218,6 +1426,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fillTeams,
       joinGame,
       fetchAndApplyRealResults,
+      syncMatchesFromApiFootball,
       applyManualMatchResult,
       triggerGachaLottery
     }}>
