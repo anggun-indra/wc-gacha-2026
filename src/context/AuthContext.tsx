@@ -581,6 +581,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const playersColRef = collection(db, "games", currentGameId, "players");
       const teamsColRef = collection(db, "games", currentGameId, "teams");
 
+      // Fetch players outside transaction (queries cannot be run inside transactions)
+      const playersSnapshot = await getDocs(playersColRef);
+      const registeredPlayers: UserProfile[] = [];
+      playersSnapshot.forEach((docSnap) => {
+        registeredPlayers.push(docSnap.data() as UserProfile);
+      });
+
+      if (registeredPlayers.length !== 8) {
+        throw new Error(`Sesi game ini harus memiliki tepat 8 pemain sebelum dapat diundi. Sekarang baru ada ${registeredPlayers.length} pemain terdaftar.`);
+      }
+
       await runTransaction(db, async (transaction) => {
         const gameSnap = await transaction.get(gameRef);
         if (!gameSnap.exists()) {
@@ -594,16 +605,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (gameData.gachaTriggered) {
           throw new Error("Pengundian tim sudah pernah dilakukan untuk game ini.");
-        }
-
-        const playersSnapshot = await getDocs(playersColRef);
-        const registeredPlayers: UserProfile[] = [];
-        playersSnapshot.forEach((docSnap) => {
-          registeredPlayers.push(docSnap.data() as UserProfile);
-        });
-
-        if (registeredPlayers.length !== 8) {
-          throw new Error(`Sesi game ini harus memiliki tepat 8 pemain sebelum dapat diundi. Sekarang baru ada ${registeredPlayers.length} pemain terdaftar.`);
         }
 
         // 8 biome-balanced packages
@@ -691,6 +692,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const gameRef = doc(db, "games", currentGameId);
       const teamsColRef = collection(db, "games", currentGameId, "teams");
 
+      // Fetch all 48 teams outside transaction
+      const teamsSnapshot = await getDocs(teamsColRef);
+      const teamDocuments: Team[] = [];
+      teamsSnapshot.forEach((docSnap) => {
+        teamDocuments.push(docSnap.data() as Team);
+      });
+
+      if (teamDocuments.length !== 48) {
+        throw new Error("Peserta tidak lengkap (harus 48 tim).");
+      }
+
       await runTransaction(db, async (transaction) => {
         const gameSnap = await transaction.get(gameRef);
         if (!gameSnap.exists()) return;
@@ -699,17 +711,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!gameData.gachaTriggered) return;
 
         const nextDay = (gameData.dayCounter || 0) + 1;
-
-        // Fetch all 48 teams of this game inside transaction
-        const teamsSnapshot = await getDocs(teamsColRef);
-        const teamDocuments: Team[] = [];
-        teamsSnapshot.forEach((docSnap) => {
-          teamDocuments.push(docSnap.data() as Team);
-        });
-
-        if (teamDocuments.length !== 48) {
-          throw new Error("Peserta tidak lengkap (harus 48 tim).");
-        }
 
         // Pair up and simulate (24 matches)
         const shuffledList = shuffleArray(teamDocuments);
@@ -831,6 +832,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const gameRef = doc(db, "games", currentGameId);
       const teamsColRef = collection(db, "games", currentGameId, "teams");
 
+      // Fetch all 48 teams outside transaction
+      const teamsSnapshot = await getDocs(teamsColRef);
+      const teamDocuments: Team[] = [];
+      teamsSnapshot.forEach((docSnap) => {
+        teamDocuments.push(docSnap.data() as Team);
+      });
+
+      if (teamDocuments.length !== 48) {
+        throw new Error("Negara peserta tidak lengkap (harus 48 negara di game ini).");
+      }
+
       await runTransaction(db, async (transaction) => {
         const gameSnap = await transaction.get(gameRef);
         if (!gameSnap.exists()) return;
@@ -841,17 +853,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const nextDay = (gameData.dayCounter || 0) + 1;
-
-        // Fetch all 48 teams
-        const teamsSnapshot = await getDocs(teamsColRef);
-        const teamDocuments: Team[] = [];
-        teamsSnapshot.forEach((docSnap) => {
-          teamDocuments.push(docSnap.data() as Team);
-        });
-
-        if (teamDocuments.length !== 48) {
-          throw new Error("Negara peserta tidak lengkap (harus 48 negara di game ini).");
-        }
 
         const dailyMatches: MatchLog[] = [];
 
@@ -959,6 +960,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const gameRef = doc(db, "games", currentGameId);
       const teamsColRef = collection(db, "games", currentGameId, "teams");
 
+      // Fetch all 48 teams outside transaction
+      const teamsSnapshot = await getDocs(teamsColRef);
+      const teamDocuments: Team[] = [];
+      teamsSnapshot.forEach((docSnap) => {
+        teamDocuments.push(docSnap.data() as Team);
+      });
+
       await runTransaction(db, async (transaction) => {
         const gameSnap = await transaction.get(gameRef);
         if (!gameSnap.exists()) return;
@@ -969,13 +977,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const nextDay = (gameData.dayCounter || 0) + 1;
-
-        // Fetch all 48 teams
-        const teamsSnapshot = await getDocs(teamsColRef);
-        const teamDocuments: Team[] = [];
-        teamsSnapshot.forEach((docSnap) => {
-          teamDocuments.push(docSnap.data() as Team);
-        });
 
         const teamA = teamDocuments.find(t => t.id === teamAId);
         const teamB = teamDocuments.find(t => t.id === teamBId);
