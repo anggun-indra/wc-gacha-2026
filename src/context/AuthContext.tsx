@@ -1037,7 +1037,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           "bosnia-herzegovina": "Bosnia & Herzegovina",
           "bosnia & herzegovina": "Bosnia & Herzegovina",
           "dr congo": "DR Congo",
-          "congo dr": "DR Congo"
+          "congo dr": "DR Congo",
+          "turkey": "Türkiye",
+          "türkiye": "Türkiye",
+          "curacao": "Curaçao",
+          "curaçao": "Curaçao"
         };
         const key = name.toLowerCase().trim();
         if (mapping[key]) return mapping[key];
