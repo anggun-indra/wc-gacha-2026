@@ -282,7 +282,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 1.8. ADMIN INSTANT SEED MOCK PLAYERS WITH COMPLETED GACHA
   const createFullMockGame = async (name: string) => {
-    if (!user || user.email !== "yusufma9292@gmail.com") {
+    if (!user || user.email?.toLowerCase() !== "yusufma9292@gmail.com") {
       setError("Hanya admin yang diperbolehkan membuat game simulasi lengkap.");
       return;
     }
@@ -454,7 +454,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 2. ADMIN FILL/POPULATE TEAMS (ISI TIM)
   const fillTeams = async (gameId: string) => {
-    if (!user || user.email !== "yusufma9292@gmail.com") {
+    if (!user || user.email?.toLowerCase() !== "yusufma9292@gmail.com") {
       setError("Hanya admin yang diperbolehkan mengisi tim.");
       return;
     }
@@ -566,7 +566,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 3.5. ADMIN GACHA LOTTERY (MANUAL TRIGGER)
   const triggerGachaLottery = async () => {
-    if (!user || user.email !== "yusufma9292@gmail.com") {
+    if (!user || user.email?.toLowerCase() !== "yusufma9292@gmail.com") {
       setError("Hanya admin yang diperbolehkan melakukan pengundian.");
       return;
     }

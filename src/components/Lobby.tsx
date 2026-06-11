@@ -35,7 +35,7 @@ export const Lobby: React.FC = () => {
   } = useAuth();
 
   const [newGameName, setNewGameName] = useState("");
-  const isAdmin = user?.email === "yusufma9292@gmail.com";
+  const isAdmin = user?.email?.toLowerCase() === "yusufma9292@gmail.com";
 
   const handleCreateGame = async (e: React.FormEvent) => {
     e.preventDefault();

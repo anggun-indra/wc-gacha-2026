@@ -11,35 +11,34 @@ export const Dashboard: React.FC = () => {
   const [manualScoreA, setManualScoreA] = React.useState<number>(0);
   const [manualScoreB, setManualScoreB] = React.useState<number>(0);
 
-  if (!profile) return null;
-
   // Find user's actual teams in the complete teams list
-  const favoritTeam = teams.find((t) => t.name === profile.favoritTeam);
-  const darkTeam = teams.find((t) => t.name === profile.darkHorseTeam);
-  const menengahAtasTeam = teams.find((t) => t.name === profile.menengahAtasTeam);
-  const menengahTeam = teams.find((t) => t.name === profile.menengahTeam);
-  const underdogKompetitifTeam = teams.find((t) => t.name === profile.underdogKompetitifTeam);
-  const underdogBeratTeam = teams.find((t) => t.name === profile.underdogBeratTeam);
+  const favoritTeam = profile ? teams.find((t) => t.name === profile.favoritTeam) : undefined;
+  const darkTeam = profile ? teams.find((t) => t.name === profile.darkHorseTeam) : undefined;
+  const menengahAtasTeam = profile ? teams.find((t) => t.name === profile.menengahAtasTeam) : undefined;
+  const menengahTeam = profile ? teams.find((t) => t.name === profile.menengahTeam) : undefined;
+  const underdogKompetitifTeam = profile ? teams.find((t) => t.name === profile.underdogKompetitifTeam) : undefined;
+  const underdogBeratTeam = profile ? teams.find((t) => t.name === profile.underdogBeratTeam) : undefined;
 
-  const totalPoints = 
+  const totalPoints = profile ? (
     (favoritTeam?.points || 0) + 
     (darkTeam?.points || 0) + 
     (menengahAtasTeam?.points || 0) + 
     (menengahTeam?.points || 0) + 
     (underdogKompetitifTeam?.points || 0) + 
-    (underdogBeratTeam?.points || 0);
+    (underdogBeratTeam?.points || 0)
+  ) : 0;
 
   return (
     <div className="space-y-6">
       {/* 1. Profile Overview Container with Sleek Glass Styling */}
       <div className="card-glass rounded-3xl p-5 shadow-2xl relative overflow-hidden transition duration-300 hover:border-slate-800">
-        <div className="absolute top-0 right-0 h-32 w-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute top-0 right-0 h-32 w-32 bg-indigo-505/5 rounded-full blur-2xl pointer-events-none" />
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="relative">
               <img 
-                src={profile.photoURL} 
-                alt={profile.name} 
+                src={profile?.photoURL || user?.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user?.uid}`} 
+                alt={profile?.name || user?.displayName || "Pengguna"} 
                 className="h-14 w-14 rounded-full border-2 border-indigo-500 bg-slate-950 object-cover"
                 referrerPolicy="no-referrer"
               />
@@ -47,12 +46,12 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-sans text-lg font-bold tracking-tight text-white">{profile.name}</h2>
+                <h2 className="font-sans text-lg font-bold tracking-tight text-white">{profile?.name || user?.displayName || "Pengguna"}</h2>
                 <span className="inline-flex items-center rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-[9px] font-bold text-indigo-400 uppercase ring-1 ring-indigo-505/20">
-                  Manajer Aktif
+                  {user?.email?.toLowerCase() === "yusufma9292@gmail.com" ? "Administrator" : "Manajer Aktif"}
                 </span>
               </div>
-              <p className="font-mono text-xs text-slate-400 mt-0.5">{profile.email}</p>
+              <p className="font-mono text-xs text-slate-400 mt-0.5">{profile?.email || user?.email}</p>
             </div>
           </div>
           
@@ -82,7 +81,7 @@ export const Dashboard: React.FC = () => {
           </p>
 
           {/* Admin Draw triggers */}
-          {user?.email === "yusufma9292@gmail.com" ? (
+          {user?.email?.toLowerCase() === "yusufma9292@gmail.com" ? (
             <div className="mt-6 mx-auto max-w-md rounded-2xl bg-indigo-950/20 border border-indigo-500/20 p-5 space-y-4">
               <div className="flex items-center gap-2 justify-center text-xs font-bold text-indigo-300 uppercase tracking-widest">
                 <ShieldCheck className="h-4 w-4 text-indigo-400" />
@@ -142,17 +141,18 @@ export const Dashboard: React.FC = () => {
         /* Active Gacha Tournament Phase */
         <div className="space-y-6">
           {/* User's Assigned Team Cards Grid */}
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-slate-400">
-                Skuad Gacha Anda (6 Tim Nasional)
-              </h3>
-              <div className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-mono font-bold text-indigo-300 border border-indigo-500/30">
-                Total Poin Anda: {totalPoints} PTS
+          {profile ? (
+            <div>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Skuad Gacha Anda (6 Tim Nasional)
+                </h3>
+                <div className="rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-mono font-bold text-indigo-300 border border-indigo-500/30">
+                  Total Poin Anda: {totalPoints} PTS
+                </div>
               </div>
-            </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {/* Favorit Card */}
               <div className="relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-indigo-600/10 p-4 group hover:bg-indigo-600/15 transition duration-300 shadow-xl">
                 <div className="absolute -right-6 -bottom-6 text-indigo-400/5 font-black text-5xl select-none group-hover:scale-110 transition duration-300 uppercase italic">
@@ -358,6 +358,15 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+          ) : (
+            <div className="card-glass rounded-3xl p-6 text-center border-slate-800/60">
+              <p className="text-sm text-slate-400 leading-relaxed font-sans">
+                {user?.email?.toLowerCase() === "yusufma9292@gmail.com"
+                  ? "💡 Anda masuk sebagai Administrator. Silakan pantau perkembangan skor dan kelola hasil pertandingan turnamen melalui panel pembaruan di bawah."
+                  : "💡 Anda masuk sebagai Penonton. Silakan pantau hasil pertandingan dan klasemen turnamen."}
+              </p>
+            </div>
+          )}
 
           {/* 3. Latest Round Matches Log */}
           {metadata.latestMatches && metadata.latestMatches.length > 0 && (
