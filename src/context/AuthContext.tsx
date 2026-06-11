@@ -1004,7 +1004,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
 
       if (completedFixtures.length === 0) {
-        throw new Error(`Ditemukan ${fixtures.length} pertandingan tapi belum ada yang selesai (status FT/AET/PEN atau skor masih kosong).`);
+        const matchDetails = fixtures.map(f => {
+          const home = f.teams.home.name;
+          const away = f.teams.away.name;
+          const status = f.fixture.status.long;
+          const time = new Date(f.fixture.date).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' });
+          return `${home} vs ${away} (${status}, Jam ${time})`;
+        }).join(", ");
+        throw new Error(`Ditemukan ${fixtures.length} pertandingan tapi belum ada yang selesai. Detail: ${matchDetails}`);
       }
 
       const allowedTeams = [
