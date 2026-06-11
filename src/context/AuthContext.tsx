@@ -1003,17 +1003,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const completedFixtures = fixtures.filter(f => 
-        f.goals.home !== null && 
-        f.goals.away !== null &&
+        f.goals?.home !== undefined && 
+        f.goals?.away !== undefined &&
+        f.goals?.home !== null && 
+        f.goals?.away !== null &&
+        f.fixture?.status?.short !== undefined &&
         ["FT", "AET", "PEN"].includes(f.fixture.status.short)
       );
 
       if (completedFixtures.length === 0) {
         const matchDetails = fixtures.map(f => {
-          const home = f.teams.home.name;
-          const away = f.teams.away.name;
-          const status = f.fixture.status.long;
-          const time = new Date(f.fixture.date).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' });
+          const home = f.teams?.home?.name || "Home";
+          const away = f.teams?.away?.name || "Away";
+          const status = f.fixture?.status?.long || "NS";
+          const time = f.fixture?.date ? new Date(f.fixture.date).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' }) : "00:00";
           return `${home} vs ${away} (${status}, Jam ${time})`;
         }).join(", ");
         throw new Error(`Ditemukan ${fixtures.length} pertandingan tapi belum ada yang selesai. Detail: ${matchDetails}`);
@@ -1028,7 +1031,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         "New Zealand", "Haiti", "Curaçao", "Ghana", "Cape Verde", "Bosnia & Herzegovina", "Jordan", "Saudi Arabia"
       ];
 
-      const mapApiFootballTeamName = (name: string): string => {
+      const mapApiFootballTeamName = (name: string | null | undefined): string => {
+        if (!name) return "";
         const mapping: Record<string, string> = {
           "usa": "United States",
           "united states": "United States",
@@ -1071,15 +1075,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const dailyMatches: MatchLog[] = [];
 
       completedFixtures.forEach((fixtureItem) => {
-        const homeMapped = mapApiFootballTeamName(fixtureItem.teams.home.name);
-        const awayMapped = mapApiFootballTeamName(fixtureItem.teams.away.name);
+        const homeMapped = mapApiFootballTeamName(fixtureItem.teams?.home?.name);
+        const awayMapped = mapApiFootballTeamName(fixtureItem.teams?.away?.name);
 
         const teamA = teamDocuments.find(t => t.name.toLowerCase() === homeMapped.toLowerCase());
         const teamB = teamDocuments.find(t => t.name.toLowerCase() === awayMapped.toLowerCase());
 
         if (teamA && teamB) {
-          const goalsA = Number(fixtureItem.goals.home);
-          const goalsB = Number(fixtureItem.goals.away);
+          const goalsA = Number(fixtureItem.goals?.home);
+          const goalsB = Number(fixtureItem.goals?.away);
 
           let pointsA = 0;
           let pointsB = 0;
@@ -1320,7 +1324,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         "New Zealand", "Haiti", "Curaçao", "Ghana", "Cape Verde", "Bosnia & Herzegovina", "Jordan", "Saudi Arabia"
       ];
 
-      const mapApiFootballTeamName = (name: string): string => {
+      const mapApiFootballTeamName = (name: string | null | undefined): string => {
+        if (!name) return "";
         const mapping: Record<string, string> = {
           "usa": "United States",
           "united states": "United States",
@@ -1369,19 +1374,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (Array.isArray(rawStandings)) {
         rawStandings.forEach((groupData: any) => {
           if (Array.isArray(groupData) && groupData.length > 0) {
-            const groupName = groupData[0].group;
+            const groupName = groupData[0]?.group || "Grup";
             const teamsStanding = groupData.map((item: any) => ({
-              rank: item.rank,
-              name: mapApiFootballTeamName(item.team.name),
-              logo: item.team.logo,
-              points: item.points,
-              played: item.all.played,
-              win: item.all.win,
-              draw: item.all.draw,
-              lose: item.all.lose,
-              goalsFor: item.all.goals.for,
-              goalsAgainst: item.all.goals.against,
-              goalsDiff: item.goalsDiff
+              rank: item.rank || 0,
+              name: mapApiFootballTeamName(item.team?.name),
+              logo: item.team?.logo || "",
+              points: item.points || 0,
+              played: item.all?.played || 0,
+              win: item.all?.win || 0,
+              draw: item.all?.draw || 0,
+              lose: item.all?.lose || 0,
+              goalsFor: item.all?.goals?.for || 0,
+              goalsAgainst: item.all?.goals?.against || 0,
+              goalsDiff: item.goalsDiff || 0
             }));
 
             parsedGroups.push({
@@ -1420,7 +1425,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (Array.isArray(rawFixtures)) {
         rawFixtures.forEach((f: any) => {
-          const roundName = f.fixture.round;
+          const roundName = f.fixture?.round || "";
           
           // Check if this round matches our targeted bracket rounds
           const matchedRoundKey = Object.keys(bracketRounds).find(key => 
@@ -1429,19 +1434,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (matchedRoundKey) {
             bracketRounds[matchedRoundKey].push({
-              id: f.fixture.id,
-              date: f.fixture.date,
-              homeTeam: mapApiFootballTeamName(f.teams.home.name),
-              awayTeam: mapApiFootballTeamName(f.teams.away.name),
-              homeLogo: f.teams.home.logo,
-              awayLogo: f.teams.away.logo,
-              homeScore: f.goals.home,
-              awayScore: f.goals.away,
-              homePen: f.score.penalty.home,
-              awayPen: f.score.penalty.away,
-              status: f.fixture.status.short,
+              id: f.fixture?.id || 0,
+              date: f.fixture?.date || "",
+              homeTeam: mapApiFootballTeamName(f.teams?.home?.name),
+              awayTeam: mapApiFootballTeamName(f.teams?.away?.name),
+              homeLogo: f.teams?.home?.logo || "",
+              awayLogo: f.teams?.away?.logo || "",
+              homeScore: f.goals?.home !== undefined ? f.goals.home : null,
+              awayScore: f.goals?.away !== undefined ? f.goals.away : null,
+              homePen: f.score?.penalty?.home !== undefined ? f.score.penalty.home : null,
+              awayPen: f.score?.penalty?.away !== undefined ? f.score.penalty.away : null,
+              status: f.fixture?.status?.short || "",
               round: matchedRoundKey,
-              winner: f.teams.home.winner ? "home" : (f.teams.away.winner ? "away" : null)
+              winner: f.teams?.home?.winner ? "home" : (f.teams?.away?.winner ? "away" : null)
             });
           }
         });
