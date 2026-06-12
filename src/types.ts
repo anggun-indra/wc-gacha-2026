@@ -57,6 +57,8 @@ export interface Game {
   teamsFilled: boolean;
   latestMatches?: MatchLog[];
   playerIds?: string[];
+  syncedRealMatchIds?: any[];
+  hasSimulationScores?: boolean;
 }
 
 export interface GroupTeamStanding {
