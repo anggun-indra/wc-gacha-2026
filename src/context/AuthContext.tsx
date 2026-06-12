@@ -1119,6 +1119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           "united states": "United States",
           "korea republic": "South Korea",
           "south korea": "South Korea",
+          "korea": "South Korea",
           "ivory coast": "Côte d'Ivoire",
           "cote d'ivoire": "Côte d'Ivoire",
           "czech republic": "Czechia",
@@ -1495,6 +1496,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           "united states": "United States",
           "korea republic": "South Korea",
           "south korea": "South Korea",
+          "korea": "South Korea",
           "ivory coast": "Côte d'Ivoire",
           "cote d'ivoire": "Côte d'Ivoire",
           "czech republic": "Czechia",
@@ -1532,26 +1534,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(`API-Football standings error: ${JSON.stringify(standingsData.errors)}`);
       }
 
-      const rawStandings = standingsData.response?.[0]?.league?.standings;
-      const parsedGroups: GroupStanding[] = [];
+      let totalStandingsPlayed = 0;
 
       if (Array.isArray(rawStandings)) {
         rawStandings.forEach((groupData: any) => {
           if (Array.isArray(groupData) && groupData.length > 0) {
             const groupName = groupData[0]?.group || "Grup";
-            const teamsStanding = groupData.map((item: any) => ({
-              rank: item.rank || 0,
-              name: mapApiFootballTeamName(item.team?.name),
-              logo: item.team?.logo || "",
-              points: item.points || 0,
-              played: item.all?.played || 0,
-              win: item.all?.win || 0,
-              draw: item.all?.draw || 0,
-              lose: item.all?.lose || 0,
-              goalsFor: item.all?.goals?.for || 0,
-              goalsAgainst: item.all?.goals?.against || 0,
-              goalsDiff: item.goalsDiff || 0
-            }));
+            const teamsStanding = groupData.map((item: any) => {
+              const playedCount = item.all?.played || 0;
+              totalStandingsPlayed += playedCount;
+              return {
+                rank: item.rank || 0,
+                name: mapApiFootballTeamName(item.team?.name),
+                logo: item.team?.logo || "",
+                points: item.points || 0,
+                played: playedCount,
+                win: item.all?.win || 0,
+                draw: item.all?.draw || 0,
+                lose: item.all?.lose || 0,
+                goalsFor: item.all?.goals?.for || 0,
+                goalsAgainst: item.all?.goals?.against || 0,
+                goalsDiff: item.goalsDiff || 0
+              };
+            });
 
             parsedGroups.push({
               name: groupName,
@@ -1587,6 +1592,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         "Third place play-off": []
       };
 
+      let totalFinishedGroupMatches = 0;
+      if (Array.isArray(rawFixtures)) {
+        rawFixtures.forEach((f: any) => {
+          const roundName = f.fixture?.round || "";
+          const finished = f.fixture?.status?.short && ["FT", "AET", "PEN"].includes(f.fixture.status.short);
+          if (finished && roundName.toLowerCase().includes("group stage")) {
+            totalFinishedGroupMatches++;
+          }
+        });
+      }
+
+      const standingsDelayed = totalStandingsPlayed < totalFinishedGroupMatches * 2;
       const completedMatchIds: any[] = [];
 
       if (Array.isArray(rawFixtures)) {
@@ -1597,13 +1614,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const homeMapped = mapApiFootballTeamName(f.teams?.home?.name);
           const awayMapped = mapApiFootballTeamName(f.teams?.away?.name);
           const dateStr = f.fixture?.date ? f.fixture.date.split("T")[0] : "";
+          const isGroupStage = roundName.toLowerCase().includes("group stage");
 
           if (finished) {
-            if (f.fixture?.id) {
-              completedMatchIds.push(f.fixture.id);
-            }
-            if (homeMapped && awayMapped && dateStr) {
-              completedMatchIds.push(getMatchKey(homeMapped, awayMapped, dateStr));
+            const shouldAddId = !isGroupStage || !standingsDelayed;
+            if (shouldAddId) {
+              if (f.fixture?.id) {
+                completedMatchIds.push(f.fixture.id);
+              }
+              if (homeMapped && awayMapped && dateStr) {
+                completedMatchIds.push(getMatchKey(homeMapped, awayMapped, dateStr));
+              }
             }
           }
 
