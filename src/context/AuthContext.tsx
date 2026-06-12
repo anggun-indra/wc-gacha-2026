@@ -1248,6 +1248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const matchKey = getMatchKey(homeMapped, awayMapped, dateStrPart);
 
             const alreadyCounted = syncedRealMatchIds.includes(matchId) || syncedRealMatchIds.includes(matchKey);
+            console.log(`[API Daily Sync] Match: ${teamA.name} vs ${teamB.name}. Score: ${goalsA}-${goalsB}. isGroup: ${fixtureItem.fixture?.round}. alreadyCounted: ${alreadyCounted}. currentPoints: ${teamA.name}=${teamA.points}, ${teamB.name}=${teamB.points}`);
 
             let pointsA = 0;
             let pointsB = 0;
@@ -1264,10 +1265,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!alreadyCounted) {
               teamA.points += pointsA;
               teamB.points += pointsB;
+              console.log(`[API Daily Sync] Added points: ${teamA.name} +${pointsA}, ${teamB.name} +${pointsB}`);
               if (matchId) {
                 newSyncedIds.push(matchId);
               }
               newSyncedIds.push(matchKey);
+            } else {
+              console.log(`[API Daily Sync] Skipped points addition since this match is already counted.`);
             }
 
             dailyMatches.push({
@@ -1276,6 +1280,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               scoreA: goalsA,
               scoreB: goalsB
             });
+          } else {
+            console.warn(`[API Daily Sync] Skipping match since mapped teams couldn't be matched in database. Home Mapped: ${homeMapped}, Away Mapped: ${awayMapped}`);
           }
         });
 
