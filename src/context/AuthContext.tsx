@@ -849,6 +849,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Negara peserta tidak lengkap (harus 48 negara di game ini).");
       }
 
+      // Load standings and bracket from Firestore to clear any simulation points
+      const standingsDocRef = doc(db, "games", currentGameId, "standings", "data");
+      const bracketDocRef = doc(db, "games", currentGameId, "bracket", "data");
+      const [standingsSnap, bracketSnap] = await Promise.all([
+        getDoc(standingsDocRef),
+        getDoc(bracketDocRef)
+      ]);
+
+      const teamPointsMap: Record<string, number> = {};
+
+      // Helper to calculate knockout points for a finished match
+      const getKnockoutPoints = (match: BracketMatch): { home: number; away: number } => {
+        const finished = ["FT", "AET", "PEN"].includes(match.status);
+        if (!finished) return { home: 0, away: 0 };
+        if (match.winner === "home") return { home: 3, away: 0 };
+        if (match.winner === "away") return { home: 0, away: 3 };
+        return { home: 0, away: 0 };
+      };
+
+      let standingsExist = false;
+      if (standingsSnap.exists()) {
+        standingsExist = true;
+        const stData = standingsSnap.data() as StandingsData;
+        stData.groups.forEach(group => {
+          group.teams.forEach(t => {
+            const nameNorm = t.name.toLowerCase().trim();
+            teamPointsMap[nameNorm] = t.points;
+          });
+        });
+      }
+
+      const finishedBracketMatchIds = new Set<number>();
+      if (bracketSnap.exists()) {
+        const brData = bracketSnap.data() as BracketData;
+        Object.keys(brData.rounds).forEach(roundKey => {
+          brData.rounds[roundKey].forEach(match => {
+            const homeNorm = match.homeTeam.toLowerCase().trim();
+            const awayNorm = match.awayTeam.toLowerCase().trim();
+            const pts = getKnockoutPoints(match);
+            if (pts.home > 0 && homeNorm) {
+              teamPointsMap[homeNorm] = (teamPointsMap[homeNorm] || 0) + pts.home;
+            }
+            if (pts.away > 0 && awayNorm) {
+              teamPointsMap[awayNorm] = (teamPointsMap[awayNorm] || 0) + pts.away;
+            }
+
+            const finished = ["FT", "AET", "PEN"].includes(match.status);
+            if (finished && match.id) {
+              finishedBracketMatchIds.add(match.id);
+            }
+          });
+        });
+      }
+
+      // Reset all team points in teamDocuments to their real synced points from standings/bracket first
+      teamDocuments.forEach((t) => {
+        const nameNorm = t.name.toLowerCase().trim();
+        t.points = teamPointsMap[nameNorm] || 0;
+      });
+
       await runTransaction(db, async (transaction) => {
         const gameSnap = await transaction.get(gameRef);
         if (!gameSnap.exists()) return;
@@ -871,6 +931,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const goalsA = Number(actualMatch.scoreA);
             const goalsB = Number(actualMatch.scoreB);
 
+            // Check if this fixture is already counted in teamPointsMap
+            const isGroupStage = true; // Mock real results synced here are group stage
+            
+            let alreadyCounted = false;
+            if (isGroupStage && standingsExist) {
+              alreadyCounted = true;
+            }
+
             let pointsA = 0;
             let pointsB = 0;
 
@@ -883,8 +951,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               pointsB = 1;
             }
 
-            teamA.points += pointsA;
-            teamB.points += pointsB;
+            if (!alreadyCounted) {
+              teamA.points += pointsA;
+              teamB.points += pointsB;
+            }
 
             dailyMatches.push({
               teamA: teamA.name,
@@ -1072,6 +1142,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error("Negara peserta tidak lengkap (harus 48 negara di game ini).");
       }
 
+      // Load standings and bracket from Firestore to clear any simulation points
+      const standingsDocRef = doc(db, "games", currentGameId, "standings", "data");
+      const bracketDocRef = doc(db, "games", currentGameId, "bracket", "data");
+      const [standingsSnap, bracketSnap] = await Promise.all([
+        getDoc(standingsDocRef),
+        getDoc(bracketDocRef)
+      ]);
+
+      const teamPointsMap: Record<string, number> = {};
+
+      // Helper to calculate knockout points for a finished match
+      const getKnockoutPoints = (match: BracketMatch): { home: number; away: number } => {
+        const finished = ["FT", "AET", "PEN"].includes(match.status);
+        if (!finished) return { home: 0, away: 0 };
+        if (match.winner === "home") return { home: 3, away: 0 };
+        if (match.winner === "away") return { home: 0, away: 3 };
+        return { home: 0, away: 0 };
+      };
+
+      let standingsExist = false;
+      if (standingsSnap.exists()) {
+        standingsExist = true;
+        const stData = standingsSnap.data() as StandingsData;
+        stData.groups.forEach(group => {
+          group.teams.forEach(t => {
+            const nameNorm = t.name.toLowerCase().trim();
+            teamPointsMap[nameNorm] = t.points;
+          });
+        });
+      }
+
+      const finishedBracketMatchIds = new Set<number>();
+      if (bracketSnap.exists()) {
+        const brData = bracketSnap.data() as BracketData;
+        Object.keys(brData.rounds).forEach(roundKey => {
+          brData.rounds[roundKey].forEach(match => {
+            const homeNorm = match.homeTeam.toLowerCase().trim();
+            const awayNorm = match.awayTeam.toLowerCase().trim();
+            const pts = getKnockoutPoints(match);
+            if (pts.home > 0 && homeNorm) {
+              teamPointsMap[homeNorm] = (teamPointsMap[homeNorm] || 0) + pts.home;
+            }
+            if (pts.away > 0 && awayNorm) {
+              teamPointsMap[awayNorm] = (teamPointsMap[awayNorm] || 0) + pts.away;
+            }
+
+            const finished = ["FT", "AET", "PEN"].includes(match.status);
+            if (finished && match.id) {
+              finishedBracketMatchIds.add(match.id);
+            }
+          });
+        });
+      }
+
+      // Reset all team points in teamDocuments to their real synced points from standings/bracket first
+      teamDocuments.forEach((t) => {
+        const nameNorm = t.name.toLowerCase().trim();
+        t.points = teamPointsMap[nameNorm] || 0;
+      });
+
       const dailyMatches: MatchLog[] = [];
 
       completedFixtures.forEach((fixtureItem) => {
@@ -1085,6 +1215,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const goalsA = Number(fixtureItem.goals?.home);
           const goalsB = Number(fixtureItem.goals?.away);
 
+          // Check if this fixture is already counted in teamPointsMap
+          const isGroupStage = (fixtureItem.fixture?.round || "").toLowerCase().includes("group stage");
+          const isKnockout = !isGroupStage;
+          const matchId = fixtureItem.fixture?.id;
+
+          let alreadyCounted = false;
+          if (isGroupStage && standingsExist) {
+            alreadyCounted = true;
+          } else if (isKnockout && matchId && finishedBracketMatchIds.has(matchId)) {
+            alreadyCounted = true;
+          }
+
           let pointsA = 0;
           let pointsB = 0;
 
@@ -1097,8 +1239,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             pointsB = 1;
           }
 
-          teamA.points += pointsA;
-          teamB.points += pointsB;
+          if (!alreadyCounted) {
+            teamA.points += pointsA;
+            teamB.points += pointsB;
+          }
 
           dailyMatches.push({
             teamA: teamA.name,
