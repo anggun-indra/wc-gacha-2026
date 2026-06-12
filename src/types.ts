@@ -43,6 +43,8 @@ export interface MatchLog {
   teamB: string;
   scoreA: number;
   scoreB: number;
+  id?: number;
+  date?: string;
 }
 
 export interface Game {
@@ -58,6 +60,7 @@ export interface Game {
   latestMatches?: MatchLog[];
   playerIds?: string[];
   syncedRealMatchIds?: any[];
+  syncedRealMatches?: MatchLog[];
   hasSimulationScores?: boolean;
 }
 

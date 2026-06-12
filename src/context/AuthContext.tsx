@@ -152,6 +152,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return `${sorted[0]}_vs_${sorted[1]}_${dateStr}`;
   };
 
+  const calculateRealPoints = (
+    syncedMatches: MatchLog[],
+    bracketData: BracketData | null
+  ): Record<string, number> => {
+    const pointsMap: Record<string, number> = {};
+
+    if (Array.isArray(syncedMatches)) {
+      syncedMatches.forEach((match) => {
+        const homeNorm = match.teamA.toLowerCase().trim();
+        const awayNorm = match.teamB.toLowerCase().trim();
+        const scoreA = match.scoreA;
+        const scoreB = match.scoreB;
+
+        if (scoreA > scoreB) {
+          pointsMap[homeNorm] = (pointsMap[homeNorm] || 0) + 3;
+          pointsMap[awayNorm] = (pointsMap[awayNorm] || 0) + 0;
+        } else if (scoreA < scoreB) {
+          pointsMap[homeNorm] = (pointsMap[homeNorm] || 0) + 0;
+          pointsMap[awayNorm] = (pointsMap[awayNorm] || 0) + 3;
+        } else {
+          pointsMap[homeNorm] = (pointsMap[homeNorm] || 0) + 1;
+          pointsMap[awayNorm] = (pointsMap[awayNorm] || 0) + 1;
+        }
+      });
+    }
+
+    const getKnockoutPoints = (match: BracketMatch): { home: number; away: number } => {
+      const finished = ["FT", "AET", "PEN"].includes(match.status);
+      if (!finished) return { home: 0, away: 0 };
+      if (match.winner === "home") return { home: 3, away: 0 };
+      if (match.winner === "away") return { home: 0, away: 3 };
+      return { home: 0, away: 0 };
+    };
+
+    if (bracketData && bracketData.rounds) {
+      Object.keys(bracketData.rounds).forEach((roundKey) => {
+        bracketData.rounds[roundKey].forEach((match) => {
+          const homeNorm = match.homeTeam.toLowerCase().trim();
+          const awayNorm = match.awayTeam.toLowerCase().trim();
+          const pts = getKnockoutPoints(match);
+          if (pts.home > 0 && homeNorm) {
+            pointsMap[homeNorm] = (pointsMap[homeNorm] || 0) + pts.home;
+          }
+          if (pts.away > 0 && awayNorm) {
+            pointsMap[awayNorm] = (pointsMap[awayNorm] || 0) + pts.away;
+          }
+        });
+      });
+    }
+
+    return pointsMap;
+  };
+
   // Google Authentication and Registration Transaction Guard
   const signIn = async () => {
     setError(null);
@@ -921,18 +974,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const nextDay = (gameData.dayCounter || 0) + 1;
         const syncedRealMatchIds = gameData.syncedRealMatchIds || [];
-        const hasSimulation = gameData.hasSimulationScores || false;
-
-        // Reset points to standings/bracket ground truth if simulation was run
-        if (hasSimulation) {
-          teamDocuments.forEach((t) => {
-            const nameNorm = t.name.toLowerCase().trim();
-            t.points = teamPointsMap[nameNorm] || 0;
-          });
-        }
+        const syncedRealMatches = gameData.syncedRealMatches || [];
 
         const dailyMatches: MatchLog[] = [];
         const newSyncedIds: any[] = [];
+        const updatedSyncedRealMatches = [...syncedRealMatches];
 
         // Apply completed matches
         completedMatches.forEach((actualMatch) => {
@@ -947,22 +993,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             const alreadyCounted = syncedRealMatchIds.includes(matchKey);
 
-            let pointsA = 0;
-            let pointsB = 0;
-
-            if (goalsA > goalsB) {
-              pointsA = 3;
-            } else if (goalsA < goalsB) {
-              pointsB = 3;
-            } else {
-              pointsA = 1;
-              pointsB = 1;
-            }
-
             if (!alreadyCounted) {
-              teamA.points += pointsA;
-              teamB.points += pointsB;
               newSyncedIds.push(matchKey);
+
+              const matchLogItem: MatchLog = {
+                teamA: teamA.name,
+                teamB: teamB.name,
+                scoreA: goalsA,
+                scoreB: goalsB,
+                date: dateStr
+              };
+              updatedSyncedRealMatches.push(matchLogItem);
             }
 
             dailyMatches.push({
@@ -977,6 +1018,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (dailyMatches.length === 0) {
           throw new Error("Nama-nama negara di Google Search tidak cocok dengan database 48 negara Anda. Tidak ada hasil yang diperbarui.");
         }
+
+        // Calculate all real points
+        const pointsMap = calculateRealPoints(
+          updatedSyncedRealMatches,
+          bracketSnap.exists() ? (bracketSnap.data() as BracketData) : null
+        );
+
+        // Update team points
+        teamDocuments.forEach((t) => {
+          const nameNorm = t.name.toLowerCase().trim();
+          t.points = pointsMap[nameNorm] || 0;
+        });
 
         // Recalculate probabilities of all 48 teams
         const teamWeights = teamDocuments.map((t) => {
@@ -1016,6 +1069,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastUpdated: serverTimestamp(),
           latestMatches: dailyMatches,
           syncedRealMatchIds: updatedSyncedIds,
+          syncedRealMatches: updatedSyncedRealMatches,
           hasSimulationScores: false
         });
       });
@@ -1220,18 +1274,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const nextDay = (gameData.dayCounter || 0) + 1;
         const syncedRealMatchIds = gameData.syncedRealMatchIds || [];
-        const hasSimulation = gameData.hasSimulationScores || false;
-
-        // Reset points to standings/bracket ground truth if simulation was run
-        if (hasSimulation) {
-          teamDocuments.forEach((t) => {
-            const nameNorm = t.name.toLowerCase().trim();
-            t.points = teamPointsMap[nameNorm] || 0;
-          });
-        }
+        const syncedRealMatches = gameData.syncedRealMatches || [];
 
         const dailyMatches: MatchLog[] = [];
         const newSyncedIds: any[] = [];
+        const updatedSyncedRealMatches = [...syncedRealMatches];
 
         completedFixtures.forEach((fixtureItem) => {
           const homeMapped = mapApiFootballTeamName(fixtureItem.teams?.home?.name);
@@ -1249,30 +1296,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const matchKey = getMatchKey(homeMapped, awayMapped, dateStrPart);
 
             const alreadyCounted = syncedRealMatchIds.includes(matchId) || syncedRealMatchIds.includes(matchKey);
-            console.log(`[API Daily Sync] Match: ${teamA.name} vs ${teamB.name}. Score: ${goalsA}-${goalsB}. isGroup: ${fixtureItem.fixture?.round}. alreadyCounted: ${alreadyCounted}. currentPoints: ${teamA.name}=${teamA.points}, ${teamB.name}=${teamB.points}`);
-
-            let pointsA = 0;
-            let pointsB = 0;
-
-            if (goalsA > goalsB) {
-              pointsA = 3;
-            } else if (goalsA < goalsB) {
-              pointsB = 3;
-            } else {
-              pointsA = 1;
-              pointsB = 1;
-            }
+            console.log(`[API Daily Sync] Match: ${teamA.name} vs ${teamB.name}. Score: ${goalsA}-${goalsB}. round: ${fixtureItem.fixture?.round}. alreadyCounted: ${alreadyCounted}`);
 
             if (!alreadyCounted) {
-              teamA.points += pointsA;
-              teamB.points += pointsB;
-              console.log(`[API Daily Sync] Added points: ${teamA.name} +${pointsA}, ${teamB.name} +${pointsB}`);
               if (matchId) {
                 newSyncedIds.push(matchId);
               }
               newSyncedIds.push(matchKey);
-            } else {
-              console.log(`[API Daily Sync] Skipped points addition since this match is already counted.`);
+
+              const matchLogItem: MatchLog = {
+                teamA: teamA.name,
+                teamB: teamB.name,
+                scoreA: goalsA,
+                scoreB: goalsB,
+                id: matchId,
+                date: dateStrPart
+              };
+              updatedSyncedRealMatches.push(matchLogItem);
             }
 
             dailyMatches.push({
@@ -1289,6 +1329,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (dailyMatches.length === 0) {
           throw new Error("Nama-nama negara dari API-Football tidak cocok dengan database 48 negara Anda. Tidak ada hasil yang diperbarui.");
         }
+
+        // Calculate all real points
+        const pointsMap = calculateRealPoints(
+          updatedSyncedRealMatches,
+          bracketSnap.exists() ? (bracketSnap.data() as BracketData) : null
+        );
+
+        // Update team points
+        teamDocuments.forEach((t) => {
+          const nameNorm = t.name.toLowerCase().trim();
+          t.points = pointsMap[nameNorm] || 0;
+        });
 
         // Recalculate probabilities of all 48 teams
         const teamWeights = teamDocuments.map((t) => {
@@ -1328,6 +1380,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lastUpdated: serverTimestamp(),
           latestMatches: dailyMatches,
           syncedRealMatchIds: updatedSyncedIds,
+          syncedRealMatches: updatedSyncedRealMatches,
           hasSimulationScores: false
         });
       });
@@ -1359,6 +1412,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const gameRef = doc(db, "games", currentGameId);
       const teamsColRef = collection(db, "games", currentGameId, "teams");
+      const bracketDocRef = doc(db, "games", currentGameId, "bracket", "data");
 
       // Fetch all 48 teams outside transaction
       const teamsSnapshot = await getDocs(teamsColRef);
@@ -1366,6 +1420,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       teamsSnapshot.forEach((docSnap) => {
         teamDocuments.push(docSnap.data() as Team);
       });
+
+      // Load bracket to clear any simulation points
+      const bracketSnap = await getDoc(bracketDocRef);
 
       await runTransaction(db, async (transaction) => {
         const gameSnap = await transaction.get(gameRef);
@@ -1377,6 +1434,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const nextDay = (gameData.dayCounter || 0) + 1;
+        const syncedRealMatchIds = gameData.syncedRealMatchIds || [];
+        const syncedRealMatches = gameData.syncedRealMatches || [];
 
         const teamA = teamDocuments.find(t => t.id === teamAId);
         const teamB = teamDocuments.find(t => t.id === teamBId);
@@ -1385,27 +1444,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw new Error("Tim yang dipilih tidak valid di database.");
         }
 
-        let pointsA = 0;
-        let pointsB = 0;
-
-        if (scoreA > scoreB) {
-          pointsA = 3;
-        } else if (scoreA < scoreB) {
-          pointsB = 3;
-        } else {
-          pointsA = 1;
-          pointsB = 1;
-        }
-
-        teamA.points += pointsA;
-        teamB.points += pointsB;
-
-        const dailyMatches: MatchLog[] = [{
+        const matchKey = getMatchKey(teamA.name, teamB.name, `manual_${nextDay}`);
+        
+        const updatedSyncedRealMatchIds = [...syncedRealMatchIds, matchKey];
+        const updatedSyncedRealMatches = [...syncedRealMatches, {
           teamA: teamA.name,
           teamB: teamB.name,
           scoreA,
-          scoreB
+          scoreB,
+          date: `manual_${nextDay}`
         }];
+
+        // Calculate all real points
+        const pointsMap = calculateRealPoints(
+          updatedSyncedRealMatches,
+          bracketSnap.exists() ? (bracketSnap.data() as BracketData) : null
+        );
+
+        // Update team points
+        teamDocuments.forEach((t) => {
+          const nameNorm = t.name.toLowerCase().trim();
+          t.points = pointsMap[nameNorm] || 0;
+        });
 
         // Recalculate probabilities of all 48 teams
         const teamWeights = teamDocuments.map((t) => {
@@ -1438,11 +1498,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         });
 
+        const dailyMatches: MatchLog[] = [{
+          teamA: teamA.name,
+          teamB: teamB.name,
+          scoreA,
+          scoreB
+        }];
+
         // Update game state
         transaction.update(gameRef, {
           dayCounter: nextDay,
           lastUpdated: serverTimestamp(),
-          latestMatches: dailyMatches
+          latestMatches: dailyMatches,
+          syncedRealMatchIds: updatedSyncedRealMatchIds,
+          syncedRealMatches: updatedSyncedRealMatches,
+          hasSimulationScores: false
         });
       });
 
@@ -1612,8 +1682,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
 
-      const standingsDelayed = totalStandingsPlayed < totalFinishedGroupMatches * 2;
       const completedMatchIds: any[] = [];
+      const completedMatchesList: MatchLog[] = [];
 
       if (Array.isArray(rawFixtures)) {
         rawFixtures.forEach((f: any) => {
@@ -1626,14 +1696,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const isGroupStage = roundName.toLowerCase().includes("group stage");
 
           if (finished) {
-            const shouldAddId = !isGroupStage || !standingsDelayed;
-            if (shouldAddId) {
-              if (f.fixture?.id) {
-                completedMatchIds.push(f.fixture.id);
-              }
-              if (homeMapped && awayMapped && dateStr) {
-                completedMatchIds.push(getMatchKey(homeMapped, awayMapped, dateStr));
-              }
+            if (f.fixture?.id) {
+              completedMatchIds.push(f.fixture.id);
+            }
+            if (homeMapped && awayMapped && dateStr) {
+              completedMatchIds.push(getMatchKey(homeMapped, awayMapped, dateStr));
+            }
+
+            if (isGroupStage && homeMapped && awayMapped && f.goals?.home !== null && f.goals?.away !== null) {
+              completedMatchesList.push({
+                teamA: homeMapped,
+                teamB: awayMapped,
+                scoreA: Number(f.goals.home),
+                scoreB: Number(f.goals.away),
+                id: f.fixture?.id,
+                date: dateStr
+              });
             }
           }
 
@@ -1667,53 +1745,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bracketRounds[roundKey].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       });
 
-      // Helper to calculate knockout points for a finished match
-      const getKnockoutPoints = (match: BracketMatch): { home: number; away: number } => {
-        const finished = ["FT", "AET", "PEN"].includes(match.status);
-        if (!finished) return { home: 0, away: 0 };
-
-        if (match.winner === "home") return { home: 3, away: 0 };
-        if (match.winner === "away") return { home: 0, away: 3 };
-
-        // Fallback check
-        if (match.homeScore !== null && match.awayScore !== null) {
-          if (match.homeScore > match.awayScore) return { home: 3, away: 0 };
-          if (match.homeScore < match.awayScore) return { home: 0, away: 3 };
-          
-          if (match.homePen !== null && match.awayPen !== null) {
-            if (match.homePen > match.awayPen) return { home: 3, away: 0 };
-            if (match.homePen < match.awayPen) return { home: 0, away: 3 };
-          }
-          return { home: 1, away: 1 };
-        }
-        return { home: 0, away: 0 };
-      };
-
-      const teamPointsMap: Record<string, number> = {};
-
-      // Seed with group stage points
-      parsedGroups.forEach(group => {
-        group.teams.forEach(t => {
-          const nameNorm = t.name.toLowerCase().trim();
-          teamPointsMap[nameNorm] = t.points;
-        });
-      });
-
-      // Add knockout stage points (wins)
-      Object.keys(bracketRounds).forEach(roundKey => {
-        bracketRounds[roundKey].forEach(match => {
-          const homeNorm = match.homeTeam.toLowerCase().trim();
-          const awayNorm = match.awayTeam.toLowerCase().trim();
-
-          const pts = getKnockoutPoints(match);
-          if (pts.home > 0 && homeNorm) {
-            teamPointsMap[homeNorm] = (teamPointsMap[homeNorm] || 0) + pts.home;
-          }
-          if (pts.away > 0 && awayNorm) {
-            teamPointsMap[awayNorm] = (teamPointsMap[awayNorm] || 0) + pts.away;
-          }
-        });
-      });
+      // Calculate points dynamically from completedMatchesList and bracketRounds
+      const pointsMap = calculateRealPoints(completedMatchesList, { rounds: bracketRounds, lastUpdated: null });
 
       // Fetch all team documents to update points and probabilities
       const teamsColRef = collection(db, "games", currentGameId, "teams");
@@ -1737,7 +1770,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           else if (t.tier === "underdog_kompetitif") baseWeight = 1.5;
           else if (t.tier === "underdog_berat") baseWeight = 0.5;
 
-          const realPts = teamPointsMap[t.name.toLowerCase().trim()] || 0;
+          const realPts = pointsMap[t.name.toLowerCase().trim()] || 0;
           t.points = realPts; // Update local ref
 
           const scoreWeight = realPts * 1.5;
@@ -1777,6 +1810,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const gameRef = doc(db, "games", currentGameId);
           transaction.update(gameRef, {
             syncedRealMatchIds: completedMatchIds,
+            syncedRealMatches: completedMatchesList,
             hasSimulationScores: false,
             lastUpdated: serverTimestamp()
           });
@@ -1797,6 +1831,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const gameRef = doc(db, "games", currentGameId);
         await updateDoc(gameRef, {
           syncedRealMatchIds: completedMatchIds,
+          syncedRealMatches: completedMatchesList,
           hasSimulationScores: false,
           lastUpdated: serverTimestamp()
         });
