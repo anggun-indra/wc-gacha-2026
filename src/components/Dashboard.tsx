@@ -16,17 +16,50 @@ const getWorldCupChampion = (bracket: any): string | null => {
   return null;
 };
 
+// Helper function for name normalization
+const normalizeTeamName = (name: string | null | undefined): string => {
+  if (!name) return "";
+  const mapping: Record<string, string> = {
+    "usa": "United States",
+    "united states": "United States",
+    "korea republic": "South Korea",
+    "south korea": "South Korea",
+    "korea": "South Korea",
+    "ivory coast": "Côte d'Ivoire",
+    "cote d'ivoire": "Côte d'Ivoire",
+    "czech republic": "Czechia",
+    "czechia": "Czechia",
+    "bosnia and herzegovina": "Bosnia & Herzegovina",
+    "bosnia-herzegovina": "Bosnia & Herzegovina",
+    "bosnia & herzegovina": "Bosnia & Herzegovina",
+    "dr congo": "DR Congo",
+    "congo dr": "DR Congo",
+    "turkey": "Türkiye",
+    "türkiye": "Türkiye",
+    "curacao": "Curaçao",
+    "curaçao": "Curaçao"
+  };
+  const key = name.toLowerCase().trim();
+  return mapping[key] || name.trim();
+};
+
+const matchTeam = (teams: any[], teamName: string | null | undefined) => {
+  if (!teams || !teamName) return undefined;
+  const normalizedSearch = normalizeTeamName(teamName).toLowerCase();
+  return teams.find(t => normalizeTeamName(t.name).toLowerCase() === normalizedSearch);
+};
+
 // Helper to check if user owns the World Cup champion team
 const isOwnerOfWorldCupChampion = (profile: any, championName: string | null): boolean => {
   if (!profile || !championName) return false;
-  const cName = championName.toLowerCase();
+  const cNameNorm = normalizeTeamName(championName).toLowerCase();
   return (
-    profile.favoritTeam?.toLowerCase() === cName ||
-    profile.darkHorseTeam?.toLowerCase() === cName ||
-    profile.menengahAtasTeam?.toLowerCase() === cName ||
-    profile.menengahTeam?.toLowerCase() === cName ||
-    profile.underdogKompetitifTeam?.toLowerCase() === cName ||
-    profile.underdogBeratTeam?.toLowerCase() === cName
+    normalizeTeamName(profile.favoritTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.darkHorseTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.menengahAtasTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.menengahTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.underdogKompetitifTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.underdogBeratTeam).toLowerCase() === cNameNorm
   );
 };
 
@@ -39,12 +72,12 @@ export const Dashboard: React.FC = () => {
   const [manualScoreB, setManualScoreB] = React.useState<number>(0);
 
   // Find user's actual teams in the complete teams list
-  const favoritTeam = profile ? teams.find((t) => t.name === profile.favoritTeam) : undefined;
-  const darkTeam = profile ? teams.find((t) => t.name === profile.darkHorseTeam) : undefined;
-  const menengahAtasTeam = profile ? teams.find((t) => t.name === profile.menengahAtasTeam) : undefined;
-  const menengahTeam = profile ? teams.find((t) => t.name === profile.menengahTeam) : undefined;
-  const underdogKompetitifTeam = profile ? teams.find((t) => t.name === profile.underdogKompetitifTeam) : undefined;
-  const underdogBeratTeam = profile ? teams.find((t) => t.name === profile.underdogBeratTeam) : undefined;
+  const favoritTeam = profile ? matchTeam(teams, profile.favoritTeam) : undefined;
+  const darkTeam = profile ? matchTeam(teams, profile.darkHorseTeam) : undefined;
+  const menengahAtasTeam = profile ? matchTeam(teams, profile.menengahAtasTeam) : undefined;
+  const menengahTeam = profile ? matchTeam(teams, profile.menengahTeam) : undefined;
+  const underdogKompetitifTeam = profile ? matchTeam(teams, profile.underdogKompetitifTeam) : undefined;
+  const underdogBeratTeam = profile ? matchTeam(teams, profile.underdogBeratTeam) : undefined;
 
   const championTeam = getWorldCupChampion(bracket);
 
@@ -54,12 +87,12 @@ export const Dashboard: React.FC = () => {
   let currentUserBonus = 0;
 
   (users || []).forEach((u) => {
-    const uFav = teams.find((t) => t.name === u.favoritTeam);
-    const uDark = teams.find((t) => t.name === u.darkHorseTeam);
-    const uMA = teams.find((t) => t.name === u.menengahAtasTeam);
-    const uM = teams.find((t) => t.name === u.menengahTeam);
-    const uUK = teams.find((t) => t.name === u.underdogKompetitifTeam);
-    const uUB = teams.find((t) => t.name === u.underdogBeratTeam);
+    const uFav = matchTeam(teams, u.favoritTeam);
+    const uDark = matchTeam(teams, u.darkHorseTeam);
+    const uMA = matchTeam(teams, u.menengahAtasTeam);
+    const uM = matchTeam(teams, u.menengahTeam);
+    const uUK = matchTeam(teams, u.underdogKompetitifTeam);
+    const uUB = matchTeam(teams, u.underdogBeratTeam);
 
     const basePts = 
       (uFav?.points || 0) + 

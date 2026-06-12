@@ -15,7 +15,8 @@ import {
   onSnapshot,
   query,
   orderBy,
-  setDoc
+  setDoc,
+  updateDoc
 } from "firebase/firestore";
 import { db, auth, googleProvider, handleFirestoreError, OperationType } from "../firebase";
 import { UserProfile, Team, SystemMetadata, Game, MatchLog, StandingsData, BracketData, BracketMatch, GroupStanding } from "../types";
@@ -1540,6 +1541,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(`API-Football standings error: ${JSON.stringify(standingsData.errors)}`);
       }
 
+      const rawStandings = standingsData.response?.[0]?.league?.standings || [];
+      const parsedGroups: GroupStanding[] = [];
       let totalStandingsPlayed = 0;
 
       if (Array.isArray(rawStandings)) {

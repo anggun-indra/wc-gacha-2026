@@ -16,17 +16,50 @@ const getWorldCupChampion = (bracket: any): string | null => {
   return null;
 };
 
+// Helper function for name normalization
+const normalizeTeamName = (name: string | null | undefined): string => {
+  if (!name) return "";
+  const mapping: Record<string, string> = {
+    "usa": "United States",
+    "united states": "United States",
+    "korea republic": "South Korea",
+    "south korea": "South Korea",
+    "korea": "South Korea",
+    "ivory coast": "Côte d'Ivoire",
+    "cote d'ivoire": "Côte d'Ivoire",
+    "czech republic": "Czechia",
+    "czechia": "Czechia",
+    "bosnia and herzegovina": "Bosnia & Herzegovina",
+    "bosnia-herzegovina": "Bosnia & Herzegovina",
+    "bosnia & herzegovina": "Bosnia & Herzegovina",
+    "dr congo": "DR Congo",
+    "congo dr": "DR Congo",
+    "turkey": "Türkiye",
+    "türkiye": "Türkiye",
+    "curacao": "Curaçao",
+    "curaçao": "Curaçao"
+  };
+  const key = name.toLowerCase().trim();
+  return mapping[key] || name.trim();
+};
+
+const matchTeam = (teams: any[], teamName: string | null | undefined) => {
+  if (!teams || !teamName) return undefined;
+  const normalizedSearch = normalizeTeamName(teamName).toLowerCase();
+  return teams.find(t => normalizeTeamName(t.name).toLowerCase() === normalizedSearch);
+};
+
 // Helper to check if user owns the World Cup champion team
 const isOwnerOfWorldCupChampion = (profile: any, championName: string | null): boolean => {
   if (!profile || !championName) return false;
-  const cName = championName.toLowerCase();
+  const cNameNorm = normalizeTeamName(championName).toLowerCase();
   return (
-    profile.favoritTeam?.toLowerCase() === cName ||
-    profile.darkHorseTeam?.toLowerCase() === cName ||
-    profile.menengahAtasTeam?.toLowerCase() === cName ||
-    profile.menengahTeam?.toLowerCase() === cName ||
-    profile.underdogKompetitifTeam?.toLowerCase() === cName ||
-    profile.underdogBeratTeam?.toLowerCase() === cName
+    normalizeTeamName(profile.favoritTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.darkHorseTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.menengahAtasTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.menengahTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.underdogKompetitifTeam).toLowerCase() === cNameNorm ||
+    normalizeTeamName(profile.underdogBeratTeam).toLowerCase() === cNameNorm
   );
 };
 
@@ -38,12 +71,12 @@ export const Leaderboard: React.FC = () => {
 
   // Helper to map and calculate scores for leaderboard profiles
   const leaderboardData = users.map((u) => {
-    const favoritTeam = teams.find((t) => t.name === u.favoritTeam);
-    const darkTeam = teams.find((t) => t.name === u.darkHorseTeam);
-    const menengahAtasTeam = teams.find((t) => t.name === u.menengahAtasTeam);
-    const menengahTeam = teams.find((t) => t.name === u.menengahTeam);
-    const underdogKompetitifTeam = teams.find((t) => t.name === u.underdogKompetitifTeam);
-    const underdogBeratTeam = teams.find((t) => t.name === u.underdogBeratTeam);
+    const favoritTeam = matchTeam(teams, u.favoritTeam);
+    const darkTeam = matchTeam(teams, u.darkHorseTeam);
+    const menengahAtasTeam = matchTeam(teams, u.menengahAtasTeam);
+    const menengahTeam = matchTeam(teams, u.menengahTeam);
+    const underdogKompetitifTeam = matchTeam(teams, u.underdogKompetitifTeam);
+    const underdogBeratTeam = matchTeam(teams, u.underdogBeratTeam);
 
     const fPoints = favoritTeam?.points || 0;
     const dPoints = darkTeam?.points || 0;
