@@ -1457,19 +1457,124 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bracketRounds[roundKey].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       });
 
-      // 4. Save Standings and Bracket to Firestore under separate docs
+      // Helper to calculate knockout points for a finished match
+      const getKnockoutPoints = (match: BracketMatch): { home: number; away: number } => {
+        const finished = ["FT", "AET", "PEN"].includes(match.status);
+        if (!finished) return { home: 0, away: 0 };
+
+        if (match.winner === "home") return { home: 3, away: 0 };
+        if (match.winner === "away") return { home: 0, away: 3 };
+
+        // Fallback check
+        if (match.homeScore !== null && match.awayScore !== null) {
+          if (match.homeScore > match.awayScore) return { home: 3, away: 0 };
+          if (match.homeScore < match.awayScore) return { home: 0, away: 3 };
+          
+          if (match.homePen !== null && match.awayPen !== null) {
+            if (match.homePen > match.awayPen) return { home: 3, away: 0 };
+            if (match.homePen < match.awayPen) return { home: 0, away: 3 };
+          }
+          return { home: 1, away: 1 };
+        }
+        return { home: 0, away: 0 };
+      };
+
+      const teamPointsMap: Record<string, number> = {};
+
+      // Seed with group stage points
+      parsedGroups.forEach(group => {
+        group.teams.forEach(t => {
+          const nameNorm = t.name.toLowerCase().trim();
+          teamPointsMap[nameNorm] = t.points;
+        });
+      });
+
+      // Add knockout stage points (wins)
+      Object.keys(bracketRounds).forEach(roundKey => {
+        bracketRounds[roundKey].forEach(match => {
+          const homeNorm = match.homeTeam.toLowerCase().trim();
+          const awayNorm = match.awayTeam.toLowerCase().trim();
+
+          const pts = getKnockoutPoints(match);
+          if (pts.home > 0 && homeNorm) {
+            teamPointsMap[homeNorm] = (teamPointsMap[homeNorm] || 0) + pts.home;
+          }
+          if (pts.away > 0 && awayNorm) {
+            teamPointsMap[awayNorm] = (teamPointsMap[awayNorm] || 0) + pts.away;
+          }
+        });
+      });
+
+      // Fetch all team documents to update points and probabilities
+      const teamsColRef = collection(db, "games", currentGameId, "teams");
+      const teamsSnapshot = await getDocs(teamsColRef);
+      const teamDocuments: Team[] = [];
+      teamsSnapshot.forEach((docSnap) => {
+        teamDocuments.push(docSnap.data() as Team);
+      });
+
       const standingsDocRef = doc(db, "games", currentGameId, "standings", "data");
       const bracketDocRef = doc(db, "games", currentGameId, "bracket", "data");
 
-      await setDoc(standingsDocRef, {
-        groups: parsedGroups,
-        lastUpdated: serverTimestamp()
-      });
+      if (teamDocuments.length > 0) {
+        // Recalculate probabilities of all teams based on new points
+        const teamWeights = teamDocuments.map((t) => {
+          let baseWeight = 1.0;
+          if (t.tier === "favorit") baseWeight = 8.0;
+          else if (t.tier === "dark") baseWeight = 6.0;
+          else if (t.tier === "menengah_atas") baseWeight = 4.0;
+          else if (t.tier === "menengah") baseWeight = 2.5;
+          else if (t.tier === "underdog_kompetitif") baseWeight = 1.5;
+          else if (t.tier === "underdog_berat") baseWeight = 0.5;
 
-      await setDoc(bracketDocRef, {
-        rounds: bracketRounds,
-        lastUpdated: serverTimestamp()
-      });
+          const realPts = teamPointsMap[t.name.toLowerCase().trim()] || 0;
+          t.points = realPts; // Update local ref
+
+          const scoreWeight = realPts * 1.5;
+          return { id: t.id, weight: baseWeight + scoreWeight };
+        });
+
+        const totalWeight = teamWeights.reduce((sum, item) => sum + item.weight, 0);
+
+        teamDocuments.forEach((team) => {
+          const weightObj = teamWeights.find(w => w.id === team.id);
+          const rawProb = weightObj ? (weightObj.weight / totalWeight) * 100 : 2.083;
+          team.probability = Math.round(rawProb * 10) / 10;
+        });
+
+        await runTransaction(db, async (transaction) => {
+          // Update all team documents
+          teamDocuments.forEach((team) => {
+            const teamRef = doc(db, "games", currentGameId, "teams", team.id);
+            transaction.update(teamRef, {
+              points: team.points,
+              probability: team.probability
+            });
+          });
+
+          // Write standings and bracket docs
+          transaction.set(standingsDocRef, {
+            groups: parsedGroups,
+            lastUpdated: serverTimestamp()
+          });
+
+          transaction.set(bracketDocRef, {
+            rounds: bracketRounds,
+            lastUpdated: serverTimestamp()
+          });
+        });
+      } else {
+        // Fallback: just write standings and bracket docs directly
+        await setDoc(standingsDocRef, {
+          groups: parsedGroups,
+          lastUpdated: serverTimestamp()
+        });
+
+        await setDoc(bracketDocRef, {
+          rounds: bracketRounds,
+          lastUpdated: serverTimestamp()
+        });
+      }
 
       console.log("Successfully synced standings and brackets.");
     } catch (err: any) {
